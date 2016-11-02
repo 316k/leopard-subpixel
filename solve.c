@@ -23,6 +23,76 @@ int hash_fct(float* pixel_code, int nb_values, int nb_boxes) {
     return hash;
 }
 
+void hash_to_codes(float*** to_codes, int* hash_table[2], int* phases_used, int i, int j, int nb_patterns, int nb_values, int nb_boxes, int* nb_collisions) {
+    float* pixel_code = malloc(sizeof(float) * nb_patterns);
+
+    for(int k=0; k < nb_values; k++) {
+        int phase = phases_used[k];
+                
+        pixel_code[k] = to_codes[phase][i][j];
+    }
+            
+    int hash = hash_fct(pixel_code, nb_values, nb_boxes);
+            
+    // Premier arrivé prend la place
+    if(hash_table[X][hash] == -1) {
+        hash_table[X][hash] = j;
+        hash_table[Y][hash] = i;
+    } else {
+        (*nb_collisions)++;
+    }
+            
+    free(pixel_code);
+}
+
+void hash_from_codes(float*** matches, float*** from_codes, float*** to_codes, int* hash_table[2], int* phases_used, int i, int j, int nb_patterns, int nb_values, int nb_boxes, int* nb_new_matches, int* nb_better_matches) {
+    
+    float* pixel_code = malloc(sizeof(float) * nb_patterns);
+    int k;
+    
+    for(k=0; k < nb_values; k++) {
+        int phase = phases_used[k];
+                
+        pixel_code[k] = from_codes[phase][i][j];
+    }
+            
+    int hash = hash_fct(pixel_code, nb_values, nb_boxes);
+            
+    // Collision = match
+    if(hash_table[X][hash] != -1) {
+        int x = hash_table[X][hash];
+        int y = hash_table[Y][hash];
+
+        float* to_code = malloc(sizeof(float) * nb_patterns);
+
+        for(k=0; k < nb_values; k++) {
+            int phase = phases_used[k];
+                    
+            to_code[k] = to_codes[phase][y][x];
+        }
+                
+        float distance = distance_modulo_pi(pixel_code, to_code, nb_values);
+        // TODO : assert(distance > 0); failed
+                
+        // Si la nouvelle distance est plus petite, on update le match
+        if(matches[DIST][i][j] == -1.0 || distance < matches[DIST][i][j]) {
+            if(matches[DIST][i][j] == -1.0)
+                (*nb_new_matches)++;
+            else
+                (*nb_better_matches)++;
+                    
+            matches[X][i][j] = x;
+            matches[Y][i][j] = y;
+            matches[DIST][i][j] = distance;
+        }
+                
+        free(to_code);
+    }
+            
+    free(pixel_code);
+}
+
+
 void lsh(float*** matches, float*** from_codes, float*** to_codes, int nb_patterns,
          int from_w, int from_h, int to_w, int to_h) {
 
@@ -51,112 +121,97 @@ void lsh(float*** matches, float*** from_codes, float*** to_codes, int nb_patter
         from_j_end, i_increment, j_increment;
 
     int iteration = rand() % 4;
-
-    // i flipped ?
-    if(iteration % 2) {
-        to_i_start   = 0;
-        to_i_end     = to_h;
-        from_i_start = 0;
-        from_i_end   = from_h;
-        i_increment  = 1;
-    } else {
-        to_i_start   = to_h - 1;
-        to_i_end     = -1;
-        from_i_start = from_h - 1;
-        from_i_end   = -1;
-        i_increment  = -1;
-    }
-
-    // j flipped ?
-    if(iteration >= 2) {
-        to_j_start   = 0;
-        to_j_end     = to_w;
-        from_j_start = 0;
-        from_j_end   = from_w;
-        j_increment  = 1;
-    } else {
-        to_j_start   = to_w - 1;
-        to_j_end     = -1;
-        from_j_start = from_w - 1;
-        from_j_end   = -1;
-        j_increment  = -1;
-    }
     
     // Hash des to_codes
-    for(i=to_i_start; i != to_i_end; i += i_increment)
-        for(j=to_j_start; j != to_j_end; j += j_increment) {
-            float* pixel_code = malloc(sizeof(float) * nb_patterns);
-
-            for(k=0; k < nb_values; k++) {
-                int phase = phases_used[k];
-                
-                assert(phase < nb_patterns);
-                
-                pixel_code[k] = to_codes[phase][i][j];
+    switch(iteration) {
+    case 0:
+        #pragma omp parallel for private(i, j)
+        for(i=0; i < to_h; i++)
+            for(j=0; j < to_w; j++) {
+                hash_to_codes(to_codes, hash_table, phases_used, i, j,
+                              nb_patterns, nb_values, nb_boxes, &nb_collisions);
             }
+        break;
+        
             
-            int hash = hash_fct(pixel_code, nb_values, nb_boxes);
-            
-            // Premier arrivé prend la place
-            if(hash_table[X][hash] == -1) {
-                hash_table[X][hash] = j;
-                hash_table[Y][hash] = i;
-            } else {
-                nb_collisions++;
+    case 1:
+        #pragma omp parallel for private(i, j)
+        for(i=0; i < to_h; i++)
+            for(j=to_w - 1; j >= 0; j--) {
+                hash_to_codes(to_codes, hash_table, phases_used, i, j,
+                              nb_patterns, nb_values, nb_boxes, &nb_collisions);
             }
-            
-            free(pixel_code);
-        }
+        break;
 
-    printf("nb_collisions: %d / %d = %f%%\n", nb_collisions, to_w * to_h, nb_collisions /(float)(to_w * to_h) * 100);
+    case 2:
+        #pragma omp parallel for private(i, j)
+        for(i=to_h - 1; i >= 0; i--)
+            for(j=0; j < to_w; j++) {
+                hash_to_codes(to_codes, hash_table, phases_used, i, j,
+                              nb_patterns, nb_values, nb_boxes, &nb_collisions);
+            }
+        break;
+            
+    case 3:
+        #pragma omp parallel for private(i, j)
+        for(i=to_h - 1; i >= 0; i--)
+            for(j=to_w - 1; j >= 0; j--) {
+                hash_to_codes(to_codes, hash_table, phases_used, i, j,
+                              nb_patterns, nb_values, nb_boxes, &nb_collisions);
+            }
+        break;
+    }
+
+
+    printf("nb_collisions: %d / %d = %f%%\n", nb_collisions, to_w * to_h,
+           nb_collisions /(float)(to_w * to_h) * 100);
+    
     printf("hash_space_used: %d / %d = %f%%\n", to_w * to_h - nb_collisions,
            hash_table_size, (to_w * to_h - nb_collisions)/(float)hash_table_size * 100);
 
-    // Hash des to_codes
-    for(i=from_i_start; i != from_i_end; i += i_increment)
-        for(j=from_j_start; j != from_j_end; j += j_increment) {
-            float* pixel_code = malloc(sizeof(float) * nb_patterns);
-            
-            for(k=0; k < nb_values; k++) {
-                int phase = phases_used[k];
-                
-                pixel_code[k] = from_codes[phase][i][j];
+    // from_codes hashing (+ updating matches)
+    switch(iteration) {
+    case 0:
+        #pragma omp parallel for private(i, j)
+        for(i=0; i < from_h; i++)
+            for(j=0; j < from_w; j++) {
+                hash_from_codes(matches, from_codes, to_codes, hash_table,
+                                phases_used, i, j, nb_patterns, nb_values,
+                                nb_boxes, &nb_new_matches, &nb_better_matches);
             }
+        break;
+        
             
-            int hash = hash_fct(pixel_code, nb_values, nb_boxes);
-            
-            // Collision = match
-            if(hash_table[X][hash] != -1) {
-                int x = hash_table[X][hash];
-                int y = hash_table[Y][hash];
-
-                float* to_code = malloc(sizeof(float) * nb_patterns);
-
-                for(k=0; k < nb_values; k++) {
-                    int phase = phases_used[k];
-                    
-                    to_code[k] = to_codes[phase][y][x];
-                }
-                
-                float distance = distance_modulo_pi(pixel_code, to_code, nb_values);
-                
-                // Si la nouvelle distance est plus petite, on update le match
-                if(matches[DIST][i][j] == -1.0 || distance < matches[DIST][i][j]) {
-                    if(matches[DIST][i][j] == -1.0)
-                        nb_new_matches++;
-                    else
-                        nb_better_matches++;
-                    
-                    matches[X][i][j] = x;
-                    matches[Y][i][j] = y;
-                    matches[DIST][i][j] = distance;
-                }
-                
-                free(to_code);
+    case 1:
+        #pragma omp parallel for private(i, j)
+        for(i=0; i < from_h; i++)
+            for(j=from_w - 1; j >= 0; j--) {
+                hash_from_codes(matches, from_codes, to_codes, hash_table,
+                                phases_used, i, j, nb_patterns, nb_values,
+                                nb_boxes, &nb_new_matches, &nb_better_matches);
             }
+        break;
+
+    case 2:
+        #pragma omp parallel for private(i, j)
+        for(i=from_h - 1; i >= 0; i--)
+            for(j=0; j < from_w; j++) {
+                hash_from_codes(matches, from_codes, to_codes, hash_table,
+                                phases_used, i, j, nb_patterns, nb_values,
+                                nb_boxes, &nb_new_matches, &nb_better_matches);
+            }
+        break;
             
-            free(pixel_code);
-        }
+    case 3:
+        #pragma omp parallel for private(i, j)
+        for(i=from_h - 1; i >= 0; i--)
+            for(j=from_w - 1; j >= 0; j--) {
+                hash_from_codes(matches, from_codes, to_codes, hash_table,
+                                phases_used, i, j, nb_patterns, nb_values,
+                                nb_boxes, &nb_new_matches, &nb_better_matches);
+            }
+        break;
+    }
 
     free(hash_table[0]);
     free(hash_table[1]);
