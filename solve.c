@@ -161,10 +161,8 @@ void hash_from_codes(float*** matches, float*** from_codes, float*** to_codes,
         if(matches[DIST][i][j] == -1.0 || distance < matches[DIST][i][j]) {
             if(matches[DIST][i][j] == -1.0)
                 (*nb_new_matches)++;
-            else {
+            else
                 (*nb_better_matches)++;
-                // printf("%f < %f : %d\n", distance, matches[DIST][i][j], distance < matches[DIST][i][j]);
-            }
             
             matches[X][i][j] = x;
             matches[Y][i][j] = y;
@@ -345,8 +343,8 @@ int main(char argc, char** argv) {
             disable_heuristics = atoi(argv[i + 1]); i++;
         } else {
             printf("usage: %s [-t nb_threads=%d] [-c cam_format=\"%s\"]\n"
-                   "\t[-i nb_iterations=%d] [-d disable_heuristics=0]\n",
-                   argv[0], nthreads, cam_format, nb_iterations);
+                   "\t[-i nb_iterations=%d] [-d disable_heuristics=%d]\n",
+                   argv[0], nthreads, cam_format, nb_iterations, disable_heuristics);
             exit(0);
         }
     }
