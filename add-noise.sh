@@ -36,7 +36,9 @@ do
             -matte -virtual-pixel Transparent \
             +distort AffineProjection "1,$sine,0,1,0,0" +repage \
             +distort barrel "0 0 -0.25" \
+            +noise Gaussian \
             $(printf '%03d' $i).pgm
     
     let i++
 done
+rm phase*.pgm
