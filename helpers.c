@@ -212,8 +212,8 @@ float solve_phase(float* intensities, int nb_shifts) {
 }
 
 float modulo_sub_pi(float x, float y) {
-    float diff = fabs(fmod(x, PI) - fmod(y, PI));
-    
+    float diff = fabs(fmod(PI + x, PI) - fmod(PI + y, PI));
+
     return fminf(diff, PI - diff);
 }
 
