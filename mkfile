@@ -1,4 +1,4 @@
-all/:V: generate solve
+all/:V: generate solve subpixel
 
 clean:V:
 	rm -f *.pgm *.ppm sines.txt tmp.log *.png
