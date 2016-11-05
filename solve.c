@@ -313,7 +313,7 @@ void save_color_map(char* filename, float*** matches, int from_w, int from_h,
             }
         }
     
-    save_ppm16(filename, gray_levels[X], gray_levels[Y], gray_levels[DIST], from_w, from_h);
+    save_ppm(filename, gray_levels, from_w, from_h, 16);
     
     free_f32cube(gray_levels, 3);
 }
@@ -322,6 +322,14 @@ int main(char argc, char** argv) {
 
     int i, j, k, foo, shift;
     FILE* info = fopen("sines.txt", "r");
+
+    // Check file size to avoid problems if sines.txt is empty
+    fseek(info, 0, SEEK_END);
+    if(!ftell(info)) {
+        printf("error: empty sines.txt\n");
+        exit(-1);
+    }
+    fseek(info, 0, SEEK_SET);
 
     int nthreads = 4, nb_iterations = 30, from_w, from_h, to_w, to_h, nb_waves, nb_shifts, nb_patterns, disable_heuristics = 0;
 

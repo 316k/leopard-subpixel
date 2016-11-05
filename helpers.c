@@ -38,10 +38,26 @@ void free_f32cube(float*** cube, int k) {
     free(cube);
 }
 
+void read_image_header(FILE* f, int *w, int *h, int *size) {
+    char foo[100];
+
+    // Magic number (P5, P6)
+    fgets(foo, 100, f);
+
+    // "w h" or "#" (comment)
+    fgets(foo, 100, f);
+
+    while(strcmp(foo, "#\n") == 0)
+        fgets(foo, 100, f);
+
+    sscanf(foo, "%d %d", w, h);
+
+    fscanf(f, "%d\n", size);
+}
+
 float** load_pgm(char* name, int *w, int *h) {
     int i, j, v, size;
     float** mat;
-    char foo[100];
     FILE *f = fopen(name, "r");
     
     if(f == NULL) {
@@ -49,19 +65,7 @@ float** load_pgm(char* name, int *w, int *h) {
         exit(1);
     }
 
-    // Header
-    // P5
-    fgets(foo, 100, f);
-
-    // "1920 1080" or "#" (comment)
-    fgets(foo, 100, f);        
-
-    while(strcmp(foo, "#\n") == 0)
-        fgets(foo, 100, f);
-    
-    sscanf(foo, "%d %d", w, h);
-
-    fscanf(f, "%d\n", &size);
+    read_image_header(f, w, h, &size);
     
     size = size == 65535 ? 2 : 1;
 
@@ -87,78 +91,114 @@ float** load_pgm(char* name, int *w, int *h) {
     return mat;
 }
 
-void save_pgm(char* filename, float** image, int w, int h) {
+float*** load_ppm(char* name, int *w, int *h) {
+
+    int i, j, k, v, size;
+    float*** mat = malloc(sizeof(float**) * 3); // R,G,V channels
+    char foo[100];
+    FILE *f = fopen(name, "r");
+    
+    if(f == NULL) {
+        printf("%s: No such file or directory\n", name);
+        exit(1);
+    }
+
+    read_image_header(f, w, h, &size);
+    
+    size = size == 65535 ? 2 : 1;
+
+    // Read
+    for(i=0; i<3; i++)
+        mat[i] = malloc_f32matrix(*w, *h);
+    
+    for(i=0; i < *h; i++)
+        for(j=0; j < *w; j++) {
+            for(k=0; k<3; k++) {
+                if(size == 2) {
+                    // Higher
+                    v = getc(f) << 8;
+                    // Lower
+                    v += getc(f);
+                } else {
+                    v = getc(f);
+                }
+                
+                mat[k][i][j] = v;
+            }
+        }
+    
+    fclose(f);
+    
+    return mat;
+}
+
+void save_pgm(char* filename, float** image, int w, int h, int depth) {
     int i, j, v;
 
-    FILE* out = fopen(filename, "w+");
+    int max = depth == 16 ? 65535 : 255;
 
-    fprintf(out, "P5\n#\n%d %d\n255\n", w, h);
+    FILE* out;
+    if(filename != NULL)
+        out = fopen(filename, "w+");
+    else
+        out = stdout;
+
+    fprintf(out, "P5\n#\n%d %d\n%d\n", w, h, max);
     for(i=0; i < h; i++) {
         for(j=0; j<w; j++) {
 
             v = image[i][j];
             
-            if(v > 255 || v < 0.0) {
+            if(v > max || v < 0.0) {
                 fprintf(stderr, "*** WARNING : (%d, %d) = %f\n", i, j, image[i][j]);
-                v = fmin(fmax(v, 0), 255);
+                v = fmin(fmax(v, 0), max);
             }
-            
-            fputc(v, out);
+
+            if(depth == 16) {
+                // Higher
+                fputc((v >> 8), out);
+                // Lower
+                fputc((v & 255), out);
+            } else {
+                fputc(v, out);
+            }
         }
     }
 
     fclose(out);
 }
 
-void save_pgm16(char* filename, float** image, int w, int h) {
-    int i, j, v;
-
-    FILE* out = fopen(filename, "w+");
-
-    fprintf(out, "P5\n#\n%d %d\n65535\n", w, h);
-    for(i=0; i < h; i++) {
-        for(j=0; j<w; j++) {
-
-            v = image[i][j];
-            
-            if(v > 65535 || v < 0) {
-                fprintf(stderr, "*** WARNING : (%d, %d) = %f\n", i, j, image[i][j]);
-                v = fmin(fmax(v, 0), 65535);
-            }
-
-            // Higher
-            fputc((v >> 8), out);
-            // Lower
-            fputc((v & 255), out);
-        }
-    }
-
-    fclose(out);
-}
-
-void save_ppm16(char* filename, float** r, float** g, float** b, int w, int h) {
+void save_ppm(char* filename, float** channels[3], int w, int h, int depth) {
     int i, j, k, v;
+    int max = depth == 16 ? 65535 : 255;
+    
+    FILE* out;
 
-    float** channels[3] = {r, g, b};
+    if(filename != NULL)
+        out = fopen(filename, "w+");
+    else
+        out = stdout;
 
-    FILE* out = fopen(filename, "w+");
-
-    fprintf(out, "P6\n#\n%d %d\n65535\n", w, h);
+    fprintf(out, "P6\n#\n%d %d\n%d\n", w, h, max);
     for(i=0; i < h; i++) {
         for(j=0; j<w; j++) {
 
             for(k=0; k<3; k++) {
                 v = channels[k][i][j];
             
-                if(v > 65535 || v < 0) {
+                if(v > max || v < 0) {
                     fprintf(stderr, "*** WARNING : (%d, %d) = %f [channel=%d]\n", i, j, channels[k][i][j], k);
-                    v = fmin(fmax(v, 0), 65535);
+                    v = fmin(fmax(v, 0), max);
                 }
 
-                // Higher
-                fputc(v >> 8, out);
-                // Lower
-                fputc(v && 255, out);
+                if(depth == 16) {
+                    // Higher
+                    fputc((v >> 8), out);
+                    // Lower
+                    fputc((v & 255), out);
+                } else {
+                    fputc(v, out);
+                }
             }
         }
     }
@@ -650,7 +690,7 @@ float*** load_codes(char* phase_format, char* img_format, char numbered_imgs,
             }
         
             sprintf(filename, phase_format, w, h, k);
-            save_pgm16(filename, image, w, h);
+            save_pgm(filename, image, w, h, 16);
         
             free_f32matrix(image);
             free_f32cube(intensities, nb_shifts);
@@ -682,7 +722,7 @@ void save_phase(float*** intensities, char* filename, int nb_shifts, int w, int 
         free(intensities_ij);
     }
     
-    save_pgm16(filename, image, w, h);
+    save_pgm(filename, image, w, h, 16);
 
     free_f32matrix(image);
 }

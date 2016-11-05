@@ -95,7 +95,7 @@ int main(char argc, char** argv) {
 
             char filename[20];
             sprintf(filename, "leo_%d_%d_%03d_%02d.pgm", w, h, n, shift);
-            save_pgm(filename, image, w, h);
+            save_pgm(filename, image, w, h, 8);
         }
 
         char filename[30];
