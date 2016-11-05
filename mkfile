@@ -1,10 +1,10 @@
-all/:V: generate solve subpixel
+all/:V: generate solve enhance subpixel
 
 clean:V:
 	rm -f *.pgm *.ppm sines.txt tmp.log *.png
 
 sines.txt: generate
-     ./generate -t 4 -s 8 -n 20
+     ./generate -t 4 -s 3 -n 20
 
 000.pgm: sines.txt
     #./add-noise.sh
