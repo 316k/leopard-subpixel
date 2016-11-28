@@ -41,4 +41,4 @@ do
     
     let i++
 done
-rm phase*.pgm
+rm -f phase*.pgm
