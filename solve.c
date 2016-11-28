@@ -4,13 +4,8 @@
 #include <string.h>
 #include <math.h>
 #include <time.h>
-#include <assert.h>
 
 #include "helpers.c"
-
-#define X 0
-#define Y 1
-#define DIST 2
 
 #define HASH_TO_CODES()   hash_to_codes(to_codes, hash_table, phases_used, i, j, \
                                         nb_values, nb_boxes, &nb_collisions)
@@ -295,29 +290,6 @@ void lsh(float*** matches, float*** from_codes, float*** to_codes, int nb_patter
     printf("nb_better_matches: %d\n", nb_better_matches);
 }
 
-void save_color_map(char* filename, float*** matches, int from_w, int from_h,
-                    int to_w, int to_h, float max_distance) {
-    float*** gray_levels = malloc_f32cube(3, from_w, from_h);
-    
-    // Color map
-    for(int i=0; i<from_h; i++)
-        for(int j=0; j<from_w; j++) {
-            if(matches[X][i][j] == -1.0) {
-                gray_levels[X][i][j] = 65535.0;
-                gray_levels[Y][i][j] = 65535.0;
-                gray_levels[DIST][i][j] = 65535.0;
-            } else {
-                gray_levels[X][i][j] = matches[X][i][j] * 65535.0/(float)to_w;
-                gray_levels[Y][i][j] = matches[Y][i][j] * 65535.0/(float)to_h;
-                gray_levels[DIST][i][j] = fmin(matches[DIST][i][j] * 65535.0/(float)(max_distance), 65535.0);
-            }
-        }
-    
-    save_ppm(filename, gray_levels, from_w, from_h, 16);
-    
-    free_f32cube(gray_levels, 3);
-}
-
 int main(char argc, char** argv) {
 
     int i, j, k, foo, shift;
@@ -353,7 +325,7 @@ int main(char argc, char** argv) {
             printf("usage: %s [-t nb_threads=%d] [-c cam_format=\"%s\"]\n"
                    "\t[-i nb_iterations=%d] [-d disable_heuristics=%d]\n",
                    argv[0], nthreads, cam_format, nb_iterations, disable_heuristics);
-            exit(0);
+            exit(1);
         }
     }
     
@@ -390,7 +362,7 @@ int main(char argc, char** argv) {
             !disable_heuristics && i % 5 == 0 && i != 0,
             from_w, from_h, to_w, to_h);
 
-        sprintf(filename, "matches-%02d.pgm", i);
+        sprintf(filename, "matches-%02d.ppm", i);
         save_color_map(filename, matches, from_w, from_h, to_w, to_h, nb_patterns * PI/2.0);
     }
 

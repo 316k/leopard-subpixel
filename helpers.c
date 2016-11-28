@@ -1,5 +1,9 @@
 #include <unistd.h>
 
+#define X 0
+#define Y 1
+#define DIST 2
+
 const float PI = 2 * atan2(1, 0);
 
 // --------------- Images ---------------
@@ -726,3 +730,27 @@ void save_phase(float*** intensities, char* filename, int nb_shifts, int w, int 
 
     free_f32matrix(image);
 }
+
+void save_color_map(char* filename, float*** matches, int from_w, int from_h,
+                    int to_w, int to_h, float max_distance) {
+    float*** channels = malloc_f32cube(3, from_w, from_h);
+    
+    // Color map
+    for(int i=0; i<from_h; i++)
+        for(int j=0; j<from_w; j++) {
+            if(matches[X][i][j] == -1.0) {
+                channels[X][i][j] = 65535.0;
+                channels[Y][i][j] = 65535.0;
+                channels[DIST][i][j] = 65535.0;
+            } else {
+                channels[X][i][j] = matches[X][i][j] * 65535.0/to_w;
+                channels[Y][i][j] = matches[Y][i][j] * 65535.0/to_h;
+                channels[DIST][i][j] = fmin(matches[DIST][i][j] * 65535.0/max_distance, 65535.0);
+            }
+        }
+    
+    save_ppm(filename, channels, from_w, from_h, 16);
+    
+    free_f32cube(channels, 3);
+}
+
