@@ -56,7 +56,9 @@ void read_image_header(FILE* f, int *w, int *h, int *size) {
 
     sscanf(foo, "%d %d", w, h);
 
-    fscanf(f, "%d", size);
+    fgets(foo, 100, f);
+    
+    sscanf(foo, "%d", size);
 }
 
 float** load_pgm(char* name, int *w, int *h) {
