@@ -7,9 +7,39 @@
 
 #include "helpers.c"
 
+/**
+ * 0,0       1,0
+ *   |---|---|
+ *   | a | b | |
+ *   |---|---| | v
+ *   | c | d | v
+ *   |---|---|
+ * 0,1  ---> 1,1
+ *       u
+ */
+float subpixel_value(float u, float v, float a, float b, float c, float d) {
+    
+    return (1 - v) * ((1 - u) * a + u * b) + v * ((1 - u) * c + u * d);
+}
+
+float f32matrix_min(float** costs, float *u, float *v, int w, int h) {
+    float min = INFINITY;
+    
+    for(int i=0; i<h; i++)
+        for(int j=0; j<w; j++) {
+            if(costs[i][j] < min) {
+                *u = j;
+                *v = i;
+                min = costs[i][j];
+            }
+        }
+
+    return min;
+}
+
 int main(char argc, char** argv) {
 
-    int nthreads = 4, i, j, k, l, from_w, from_h, to_w, to_h, foo, nb_shifts, nb_patterns;
+    int nthreads = 4, i, j, k, from_w, from_h, to_w, to_h, foo, nb_shifts, nb_patterns;
     char* ref_format = "leo_%d_%d_%03d_%02d.pgm";
     char* cam_format = "%03d.pgm";
     
@@ -37,13 +67,11 @@ int main(char argc, char** argv) {
     if(i != argc - 1) goto usage;
 
     omp_set_num_threads(nthreads);
-
     
     srand(time(NULL));
     
     fscanf(info, "%d %d %d %d %d", &to_w, &to_h, &foo, &nb_patterns, &nb_shifts);
     fclose(info);
-    
     
     char* ref_phase_format = "phase_ref_%d_%d_%03d.pgm";
     char* cam_phase_format = "phase_cam_%d_%d_%03d.pgm";
@@ -61,84 +89,116 @@ int main(char argc, char** argv) {
                 matches[DIST][i][j] = matches[DIST][i][j] / 65535.0 * (nb_patterns * PI / 2.0);
             }
         }
-
     
     float*** subpixel = malloc_f32cube(3, from_w, from_h);
 
     float*** cam_codes = load_codes(cam_phase_format, cam_format, 1, nb_patterns, nb_shifts, from_w, from_h);
     float*** ref_codes = load_codes(ref_phase_format, ref_format, 0, nb_patterns, nb_shifts, to_w, to_h);
 
-    float*** supixeled = malloc_f32cube(2, from_w, from_h);
-
-    // #pragma omp parallel for private(i, j, k, l)
+    #pragma omp parallel for private(i, j, k)
     for(i=0; i<from_h; i++)
         for(j=0; j<from_w; j++) {
-            
-            int nx = 0;
-            int ny = 0;
             
             int x = matches[X][i][j];
             int y = matches[Y][i][j];
 
             // Undefined matches stay undefined
-            if(x == -1) {
+            if(x < 0) {
                 subpixel[X][i][j] = subpixel[Y][i][j] = subpixel[DIST][i][j] = -1;
                 continue;
             }
-
-            float val, match, original, neighbour;
+            
+            float* match = malloc(sizeof(float) * nb_patterns);
             
             for(k=0; k<nb_patterns; k++) {
-                
-                match = cam_codes[k][i][j];
-                original = ref_codes[k][i][j];
-
-                // Left
-                if(x != 0 && ((neighbour = ref_codes[k][y][x - 1]) || 1) &&
-                   ((neighbour < match && match < original) ||
-                    (neighbour > match && match > original))) { // borders are problematic
-
-                    // printf("l %f %f %f %f\n", original, match, neighbour, 0.5 - ((match - original) / (neighbour - original))/2.0);
-                    subpixel[X][i][j] += 0.5 - ((match - original) / (neighbour - original));
-                    nx++;
-                    
-                } else if(x != to_w - 1 && ((neighbour = ref_codes[k][y][x + 1]) || 1) && // Right
-                          ((neighbour < match && match < original) ||
-                           (neighbour > match && match > original))) {
-                    
-                    // printf("r %f %f %f %f\n", original, match, neighbour, 0.5 + ((match - original) / (neighbour - original))/2.0);
-                    subpixel[X][i][j] += 0.5 + ((match - original) / (neighbour - original));
-                    nx++;
-                }
-
-                // Down
-                if(y != to_h - 1 && ((neighbour = ref_codes[k][y + 1][x]) || 1) &&
-                   ((neighbour < match && match < original) ||
-                    (neighbour > match && match > original))) {
-
-                    // printf("d %f %f %f %f\n", original, match, neighbour, 0.5 + ((match - original) / (neighbour - original))/2.0);
-                    subpixel[Y][i][j] += 0.5 + ((match - original) / (neighbour - original));
-                    ny++;
-                    
-                } else if(y != 0 && ((neighbour = ref_codes[k][y - 1][x]) || 1) && // Up
-                          ((neighbour < match && match < original) ||
-                           (neighbour > match && match > original))) {
-                    
-                    //printf("u %f %f %f %f\n", original, match, neighbour, 0.5 - ((match - original) / (neighbour - original))/2.0);
-                    subpixel[Y][i][j] += 0.5 - ((match - original) / (neighbour - original));
-                    ny++;
-                }
-                
-                // TODO diago                
+                match[k] = cam_codes[k][y][x];
             }
             
-            printf("%d %d => %d %d\n", i, j, y, x);
-            // Use averages
-            if(nx)
-                subpixel[X][i][j] /= nx;
+            float** costs = malloc_f32matrix(10, 10);
+
+            float quadrant_best[4];
+            float decalage_x[4], decalage_y[4];
             
-            if(ny)
-                subpixel[Y][i][j] /= ny;
+            for(k=0; k<4; k++)
+                quadrant_best[k] = INFINITY;
+            
+            // Minimize subpixel value
+            
+            // Up-right, Up-left, Down-right, down-left
+            int pos_x[] = {+1, -1, +1, -1};
+            int pos_y[] = {-1, -1, +1, +1};
+
+            int q; // current quadrant
+            
+            for(q=0; q<4; q++) {
+                
+                // Assure que les bornes ne sont pas dépassées
+                if((pos_x[q] == -1 && x == 0) ||
+                   (pos_y[q] == -1 && y == 0) ||
+                   (pos_x[q] == +1 && x == to_w - 1) ||
+                   (pos_y[q] == +1 && y == to_h - 1))
+                    continue;
+                
+                for(int u=0; u<10; u++) {
+                    for(int v=0; v<10; v++) {
+
+                        int nb_costs = 0;
+                        
+                        for(k=0; k<nb_patterns; k++) {
+                            
+                            float m = match[k],
+                                a = ref_codes[k][y][x],
+                                b = ref_codes[k][y][x + pos_x[q]],
+                                c = ref_codes[k][y + pos_y[q]][x],
+                                d = ref_codes[k][y + pos_y[q]][x + pos_x[q]];
+                            
+                            // la phase matchée doit être un sous-pixel possible dans le quadrant
+                            // pour que le coût ait un sens
+                            // TODO : Considérer le warp dans [-PI,PI[
+                            if((m > a && m > b && m > c && m > d) ||
+                               (m < a && m < b && m < c && m < d)) {
+                                costs[v][u] += PI;
+                                continue;
+                            }
+                            
+                            costs[v][u] += fabsl(match[k] - subpixel_value(u / (float)10, v / (float)10,
+                                                                           a,b,c,d));
+                            nb_costs++;
+                        }
+                    }
+                }
+                
+                quadrant_best[q] = f32matrix_min(costs, &decalage_x[q], &decalage_y[q], 10, 10);
+                decalage_x[q] = pos_x[q] * decalage_x[q] / 2.0 + 5;
+                decalage_y[q] = pos_y[q] * decalage_y[q] / 2.0 + 5;
+                    
+                for(int u=0; u<10; u++)
+                    for(int v=0; v<10; v++)
+                        costs[u][v] = 0.0;
+            }
+                        
+            free(match);
+            free_f32matrix(costs);
+            
+            // Trouve le meilleur match de sous-pixel
+            float min = INFINITY;
+            int index = -1;
+            for(k=0; k<4; k++) {
+                // printf("%d: %f (%f %f)\n", k, quadrant_best[k], decalage_x[k], decalage_y[k]);
+                if(quadrant_best[k] < min) {
+                    min = quadrant_best[k];
+                    index = k;
+                }
+            }
+            // printf("Choice : %d\n", index);
+
+            if(index != -1) {
+                subpixel[X][i][j] = decalage_x[index] / 10.0;
+                subpixel[Y][i][j] = decalage_y[index] / 10.0;
+            } else {
+                subpixel[X][i][j] = 0.5;
+                subpixel[Y][i][j] = 0.5;
+            }
             
             // Keep distance information
             subpixel[DIST][i][j] = matches[DIST][i][j];
