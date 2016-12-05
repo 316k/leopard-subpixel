@@ -56,7 +56,7 @@ void read_image_header(FILE* f, int *w, int *h, int *size) {
 
     sscanf(foo, "%d %d", w, h);
 
-    fscanf(f, "%d\n", size);
+    fscanf(f, "%d", size);
 }
 
 float** load_pgm(char* name, int *w, int *h) {
@@ -86,7 +86,7 @@ float** load_pgm(char* name, int *w, int *h) {
             } else {
                 v = getc(f);
             }
-            
+
             mat[i][j] = v;
         }
     
@@ -272,6 +272,7 @@ float distance_modulo_pi(float* a, float* b, int len) {
 
 float grey_scale_erfc(float value) {
     int n = roundf(value * 100);
+
     if(n <= -179)
         return 255;
 
