@@ -14,20 +14,26 @@ float squared(float val) {
 
 int main(char argc, char** argv) {
 
-    int nthreads = 4, i, j, k, w, h;
+    int nthreads = 4, i, j, k, w, h, center = 0;
 
-    float decalage = 0.0;
+    float decalage = 0.0, threshold = 1.3;
 
     // Args parsing
     ARGBEGIN
     ARG_CASE('t')
         nthreads = ARGI;
-    
+
+    ARG_CASE('c')
+        center = 1;
+
+    ARG_CASE('l')
+        threshold = ARGF;
+
     WRONG_ARG
         usage:
-        printf("usage: %s [-t nb_threads=%d] ref.ppm test.ppm\n",
-               argv0, nthreads);
-    exit(1);
+        printf("usage: %s [-c] [-t nb_threads=%d] [-l threshold=%f] ref.ppm test.ppm\n",
+               argv0, nthreads, threshold);
+        exit(1);
     
     ARGEND
 
@@ -37,34 +43,23 @@ int main(char argc, char** argv) {
     float*** ref = load_ppm(argv[0], &w, &h);
     float*** test = load_ppm(argv[1], &w, &h);
 
-    unsigned long bad = 0;
-    double val, error = 0, total = 0;
+    double val;
     
     for(k=0; k < 2; k++) {
-        error = 0;
-        bad = 0;
         for(i=0; i < h; i++)
             for(j=0; j<w; j++) {
                 
-                // Quadratic error
-                val = squared(ref[k][i][j] - test[k][i][j]);
-                // printf("%f %f %f\n", test[k][i][j], ref[k][i][j], val);
-                
-                if(val < 10000) {
-                    error += val;
-                } else {
-                    bad++;
-                }
-            }
+                ref[k][i][j] = ref[k][i][j] / 65535.0 * (k == 0 ? w : h) + (center ? 0.5 : 0);
+                test[k][i][j] = test[k][i][j] / 65535.0 * (k == 0 ? w : h);
 
-        error /= (float)(w*h - bad);
-        
-        total += error;
-        
-        printf("Error %d : %f\n    Bad matches : %d\n\n", k, error, bad);
+                val = ref[k][i][j] - test[k][i][j];
+                
+                if(val > threshold)
+                    printf("bad %c %f %f %f\n", k == 0 ? 'X' : 'Y', ref[k][i][j], test[k][i][j], val);
+                else
+                    printf("ok %c %f %f %f\n", k == 0 ? 'X' : 'Y', ref[k][i][j], test[k][i][j], val);
+            }
     }
-    
-    printf("Total error : %f\n", total);
     
     return 0;
 }
