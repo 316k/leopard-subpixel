@@ -77,15 +77,16 @@ int main(char argc, char** argv) {
     char* cam_phase_format = "phase_cam_%d_%d_%03d.pgm";
 
     float*** matches = load_ppm(argv[argc - 1], &from_w, &from_h);
-
+    
     #pragma omp parallel for private(i, j)
     for(i=0; i<from_h; i++)
         for(j=0; j<from_w; j++) {
+            
             if(matches[X][i][j] == 65535.0) {
                 matches[X][i][j] = matches[Y][i][j] = matches[DIST][i][j] = -1.0;
             } else {
-                matches[X][i][j] = round(matches[X][i][j] / 65535.0 * to_w);
-                matches[Y][i][j] = round(matches[Y][i][j] / 65535.0 * to_h);
+                matches[X][i][j] = floor(matches[X][i][j] / 65535.0 * to_w);
+                matches[Y][i][j] = floor(matches[Y][i][j] / 65535.0 * to_h);
                 matches[DIST][i][j] = matches[DIST][i][j] / 65535.0 * (nb_patterns * PI / 2.0);
             }
         }
@@ -94,9 +95,10 @@ int main(char argc, char** argv) {
 
     float*** cam_codes = load_codes(cam_phase_format, cam_format, 1, nb_patterns, nb_shifts, from_w, from_h);
     float*** ref_codes = load_codes(ref_phase_format, ref_format, 0, nb_patterns, nb_shifts, to_w, to_h);
-
+    
     #pragma omp parallel for private(i, j, k)
-    for(i=0; i<from_h; i++)
+    for(i=0; i<from_h; i++) {
+        printf("%d\n", i);
         for(j=0; j<from_w; j++) {
             
             int x = matches[X][i][j];
@@ -109,9 +111,9 @@ int main(char argc, char** argv) {
             }
             
             float* match = malloc(sizeof(float) * nb_patterns);
-            
+
             for(k=0; k<nb_patterns; k++) {
-                match[k] = cam_codes[k][y][x];
+                match[k] = cam_codes[k][i][j];
             }
             
             float** costs = malloc_f32matrix(10, 10);
@@ -206,6 +208,7 @@ int main(char argc, char** argv) {
             for(k=0; k<2; k++)
                 subpixel[k][i][j] += matches[k][i][j];
         }
+    }
 
     FILE* vals;
     

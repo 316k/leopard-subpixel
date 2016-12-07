@@ -52,7 +52,7 @@ int main(char argc, char** argv) {
                 ref[k][i][j] = ref[k][i][j] / 65535.0 * (k == 0 ? w : h) + (center ? 0.5 : 0);
                 test[k][i][j] = test[k][i][j] / 65535.0 * (k == 0 ? w : h);
 
-                val = ref[k][i][j] - test[k][i][j];
+                val = fabsl(ref[k][i][j] - test[k][i][j]);
                 
                 if(val > threshold)
                     printf("bad %c %f %f %f\n", k == 0 ? 'X' : 'Y', ref[k][i][j], test[k][i][j], val);
