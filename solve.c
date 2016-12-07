@@ -5,31 +5,35 @@
 #include <math.h>
 #include <time.h>
 
+#include "args.h"
 #include "helpers.c"
 
-#define HASH_TO_CODES()   hash_to_codes(to_codes, hash_table, phases_used, i, j, \
-                                        nb_values, nb_boxes, &nb_collisions)
+// Global variables
+int nb_boxes = 10, nb_values = 8, nb_patterns,
+    from_w, from_h, to_w, to_h,
+    hash_table_size;
+float hash_divider;
+
+
+#define HASH_TO_CODES()   hash_to_codes(to_codes, hash_table, phases_used, i, j, &nb_collisions)
 
 #define HASH_FROM_CODES() hash_from_codes(matches, from_codes, to_codes, \
                                           hash_table, phases_used, i, j, \
-                                          nb_values, nb_boxes, use_heuristics, \
-                                          &nb_new_matches, &nb_better_matches, \
-                                          from_w, from_h, to_w, to_h)
+                                          use_heuristics, &nb_new_matches, &nb_better_matches)
 
-int hash_fct(float* pixel_code, int nb_values, int nb_boxes) {
+int hash_fct(float* pixel_code) {
     int hash = 0;
 
     for(int i=0; i<nb_values; i++) {
         hash *= nb_boxes;
         hash += fmod(pixel_code[i] + PI, 2 * PI) / (2 * PI) * nb_boxes;
     }
-
-    return hash;
+    
+    return floor(hash / hash_divider);
 }
 
 void hash_to_codes(float*** to_codes, int* hash_table[2], int* phases_used,
-                   int i, int j, int nb_values, int nb_boxes,
-                   int* nb_collisions) {
+                   int i, int j, int* nb_collisions) {
     float* pixel_code = malloc(sizeof(float) * nb_values);
 
     for(int k=0; k < nb_values; k++) {
@@ -38,7 +42,7 @@ void hash_to_codes(float*** to_codes, int* hash_table[2], int* phases_used,
         pixel_code[k] = to_codes[phase][i][j];
     }
     
-    int hash = hash_fct(pixel_code, nb_values, nb_boxes);
+    int hash = hash_fct(pixel_code);
     
     // Premier arrivé prend la place
     if(hash_table[X][hash] == -1) {
@@ -56,9 +60,8 @@ void hash_to_codes(float*** to_codes, int* hash_table[2], int* phases_used,
  * the matched *to* pixel with the matched *from* pixel
  */
 void forward_matching(float*** matches, float*** from_codes, float*** to_codes,
-                      float* from_code, int* phases_used, int nb_values,
-                      int from_x, int from_y, int to_x, int to_y,
-                      int to_w, int to_h) {
+                      float* from_code, int* phases_used,
+                      int from_x, int from_y, int to_x, int to_y) {
 
     float* to_code = malloc(sizeof(float) * nb_values);
 
@@ -89,9 +92,8 @@ void forward_matching(float*** matches, float*** from_codes, float*** to_codes,
  * the matched *from* pixel
  */
 void backward_matching(float*** matches, float*** from_codes, float*** to_codes,
-                      float* to_code, int* phases_used, int nb_values,
-                      int from_x, int from_y, int to_x, int to_y,
-                      int from_w, int from_h) {
+                      float* to_code, int* phases_used,
+                      int from_x, int from_y, int to_x, int to_y) {
     
     float* from_code = malloc(sizeof(float) * nb_values);
     
@@ -122,9 +124,8 @@ void backward_matching(float*** matches, float*** from_codes, float*** to_codes,
 
 void hash_from_codes(float*** matches, float*** from_codes, float*** to_codes,
                      int* hash_table[2], int* phases_used, int i, int j,
-                     int nb_values, int nb_boxes, char use_heuristics,
-                     int* nb_new_matches, int* nb_better_matches,
-                     int from_w, int from_h, int to_w, int to_h) {
+                     char use_heuristics,
+                     int* nb_new_matches, int* nb_better_matches) {
     
     float* pixel_code = malloc(sizeof(float) * nb_values);
     int k;
@@ -135,7 +136,7 @@ void hash_from_codes(float*** matches, float*** from_codes, float*** to_codes,
         pixel_code[k] = from_codes[phase][i][j];
     }
     
-    int hash = hash_fct(pixel_code, nb_values, nb_boxes);
+    int hash = hash_fct(pixel_code);
     
     // Collision = match
     if(hash_table[X][hash] != -1) {
@@ -165,12 +166,12 @@ void hash_from_codes(float*** matches, float*** from_codes, float*** to_codes,
 
             if(use_heuristics) {
                 forward_matching(matches, from_codes, to_codes,
-                                 pixel_code, phases_used, nb_values,
-                                 j, i, x, y, to_w, to_h);
+                                 pixel_code, phases_used,
+                                 j, i, x, y);
                 
                 backward_matching(matches, from_codes, to_codes,
-                                  to_code, phases_used, nb_values,
-                                  j, i, x, y, from_w, from_h);
+                                  to_code, phases_used,
+                                  j, i, x, y);
             }
         }
         
@@ -181,17 +182,14 @@ void hash_from_codes(float*** matches, float*** from_codes, float*** to_codes,
 }
 
 void lsh(float*** matches, float*** from_codes, float*** to_codes, int nb_patterns,
-         char use_heuristics, int from_w, int from_h, int to_w, int to_h) {
+         char use_heuristics) {
     
     int i, j, k, l;
-    int nb_values = 8; // (inexact->integer (ceiling (/ nb-patterns 2))))
-    int nb_boxes = 9; // (inexact->integer (ceiling (logb (* w h) nbr-values))))
+    //int nb_values = 3; // (inexact->integer (ceiling (/ nb-patterns 2))))
+    //int nb_boxes = 10; // (inexact->integer (ceiling (logb (* w h) nbr-values))))
     int nb_collisions = 0, nb_new_matches = 0, nb_better_matches = 0;
     
     int* hash_table[2];
-    int hash_table_size = powf(nb_boxes, nb_values);
-
-    printf("hash_table_size %d is %f times bigger than ~%d\n", hash_table_size, hash_table_size /(float)(to_w * to_h), to_w * to_h);
 
     for(i=0; i<2; i++) {
         hash_table[i] = malloc(hash_table_size * sizeof(int));
@@ -294,7 +292,7 @@ int main(char argc, char** argv) {
 
     int i, j, k, foo, shift;
     FILE* info = fopen("sines.txt", "r");
-
+    
     // Check file size to avoid problems if sines.txt is empty
     fseek(info, 0, SEEK_END);
     if(!ftell(info)) {
@@ -303,7 +301,9 @@ int main(char argc, char** argv) {
     }
     fseek(info, 0, SEEK_SET);
 
-    int nthreads = 4, nb_iterations = 30, from_w, from_h, to_w, to_h, nb_waves, nb_shifts, nb_patterns, disable_heuristics = 0;
+    int nthreads = 4, nb_iterations = 30, nb_waves, nb_shifts, disable_heuristics = 0;
+    
+    float hash_table_ratio = 1.0;
 
     char* ref_format = "leo_%d_%d_%03d_%02d.pgm";
     char* cam_format = "%03d.pgm";
@@ -312,31 +312,52 @@ int main(char argc, char** argv) {
     char filename[50];
     
     // Args parsing
-    for(i=1; i < argc; i++) {
-        if(strcmp(argv[i], "-t") == 0) {
-            nthreads = atoi(argv[i + 1]); i++;
-        } else if(strcmp(argv[i], "-c") == 0) {
-            cam_format = argv[i + 1]; i++;
-        } else if(strcmp(argv[i], "-i") == 0) {
-            nb_iterations = atoi(argv[i + 1]); i++;
-        } else if(strcmp(argv[i], "-d") == 0) {
-            disable_heuristics = atoi(argv[i + 1]); i++;
-        } else {
-            printf("usage: %s [-t nb_threads=%d] [-c cam_format=\"%s\"]\n"
-                   "\t[-i nb_iterations=%d] [-d disable_heuristics=%d]\n",
-                   argv[0], nthreads, cam_format, nb_iterations, disable_heuristics);
-            exit(1);
-        }
-    }
-    
-    omp_set_num_threads(nthreads);
+    ARGBEGIN
+        ARG_CASE('t')
+        nthreads = ARGI;
 
+    ARG_CASE('c')
+        cam_format = ARGS;
+
+    ARG_CASE('i')
+        nb_iterations = ARGI;
+
+    ARG_CASE('d')
+        disable_heuristics = 1;
+
+    ARG_CASE('v')
+        nb_values = ARGI;
+
+    ARG_CASE('b')
+        nb_boxes = ARGI;
+
+    ARG_CASE('p')
+        hash_table_ratio = ARGF;
+    
+    WRONG_ARG
+        printf("usage: %s [-t nb_threads=%d] [-c cam_format=\"%s\"]\n"
+               "\t[-i nb_iterations=%d] [-d (disable heuristics)]\n"
+               "\t[-b nb_boxes=%d] [-v nb_values=%d]\n"
+               "\t[-p hash_table_ratio=%f]\n",
+               argv0, nthreads, cam_format, nb_iterations,
+               nb_boxes, nb_values, hash_table_ratio);
+        exit(1);
+    
+    ARGEND
+
+    omp_set_num_threads(nthreads);
+    
     srand(time(NULL));
     
     fscanf(info, "%d %d %d %d %d", &to_w, &to_h, &nb_waves, &nb_patterns, &nb_shifts);
 
     fclose(info);
+    
+    hash_divider = floor((powf(nb_boxes, nb_values) / (to_w * to_h)) / hash_table_ratio);
+    hash_table_size = (int) ceil(powf(nb_boxes, nb_values) / hash_divider);
 
+    printf("hash_table_size=%d (%f times bigger than %d)\n", hash_table_size, hash_table_size /(float)(to_w * to_h), to_w * to_h);
+    
     // Lecture d'une image pour trouver le from_w, from_h
     sprintf(filename, cam_format, 0);
     free_f32matrix(load_pgm(filename, &from_w, &from_h));
@@ -359,8 +380,7 @@ int main(char argc, char** argv) {
         printf("----- Iteration %02d -----\n", i);
         lsh(matches, cam_codes, ref_codes, nb_patterns,
             // heuristics every 5 turn
-            !disable_heuristics && i % 5 == 0 && i != 0,
-            from_w, from_h, to_w, to_h);
+            !disable_heuristics && i % 5 == 0 && i != 0);
 
         sprintf(filename, "matches-%02d.ppm", i);
         save_color_map(filename, matches, from_w, from_h, to_w, to_h, nb_patterns * PI/2.0);
