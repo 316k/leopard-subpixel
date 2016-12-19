@@ -59,22 +59,19 @@ void hash_to_codes(float*** to_codes, int* hash_table[2], int* phases_used,
  * Attempts to improve an existing match by comparing the neighborhood of
  * the matched *to* pixel with the matched *from* pixel
  */
-void forward_matching(float*** matches, float*** from_codes, float*** to_codes,
-                      float* from_code, int* phases_used,
-                      int from_x, int from_y, int to_x, int to_y) {
+char forward_matching(float*** matches, float*** from_codes, float*** to_codes,
+                      float* from_code, int from_x, int from_y, int to_x, int to_y) {
 
-    float* to_code = malloc(sizeof(float) * nb_values);
+    float* to_code = malloc(sizeof(float) * nb_patterns);
 
     for(int i=fmax(to_y - 1, 0); i < fmin(to_y + 1, to_h - 1); i++)
         for(int j=fmax(to_x - 1, 0); j < fmin(to_x + 1, to_w - 1); j++) {
             
-            for(int k=0; k < nb_values; k++) {
-                int phase = phases_used[k];
-                
-                to_code[k] = to_codes[phase][i][j];
+            for(int k=0; k < nb_patterns; k++) {
+                to_code[k] = to_codes[k][i][j];
             }
             
-            float distance = distance_modulo_pi(from_code, to_code, nb_values);
+            float distance = distance_modulo_pi(from_code, to_code, nb_patterns);
             
             // Si la nouvelle distance est plus petite, on update le match
             if(distance < matches[DIST][from_y][from_x]) {
@@ -92,10 +89,9 @@ void forward_matching(float*** matches, float*** from_codes, float*** to_codes,
  * the matched *from* pixel
  */
 void backward_matching(float*** matches, float*** from_codes, float*** to_codes,
-                      float* to_code, int* phases_used,
-                      int from_x, int from_y, int to_x, int to_y) {
+                       float* to_code, int from_x, int from_y, int to_x, int to_y) {
     
-    float* from_code = malloc(sizeof(float) * nb_values);
+    float* from_code = malloc(sizeof(float) * nb_patterns);
     
     for(int i=fmax(from_y - 1, 0); i < fmin(from_y + 1, from_h - 1); i++)
         for(int j=fmax(from_x - 1, 0); j < fmin(from_x + 1, from_w - 1); j++) {
@@ -103,13 +99,11 @@ void backward_matching(float*** matches, float*** from_codes, float*** to_codes,
             if(i == from_y && j == from_x)
                 continue;
             
-            for(int k=0; k < nb_values; k++) {
-                int phase = phases_used[k];
-                
-                from_code[k] = from_codes[phase][i][j];
+            for(int k=0; k < nb_patterns; k++) {
+                from_code[k] = from_codes[k][i][j];
             }
             
-            float distance = distance_modulo_pi(from_code, to_code, nb_values);
+            float distance = distance_modulo_pi(from_code, to_code, nb_patterns);
             
             // Si la nouvelle distance est plus petite, on update le match
             if(distance == -1.0 || distance < matches[DIST][i][j]) {                
@@ -142,16 +136,16 @@ void hash_from_codes(float*** matches, float*** from_codes, float*** to_codes,
     if(hash_table[X][hash] != -1) {
         int x = hash_table[X][hash];
         int y = hash_table[Y][hash];
-
-        float* to_code = malloc(sizeof(float) * nb_values);
-
-        for(k=0; k < nb_values; k++) {
-            int phase = phases_used[k];
-                    
-            to_code[k] = to_codes[phase][y][x];
+        
+        float* from_code = malloc(sizeof(float) * nb_patterns);
+        float* to_code = malloc(sizeof(float) * nb_patterns);
+        
+        for(k=0; k < nb_patterns; k++) {
+            from_code[k] = from_codes[k][i][j];
+            to_code[k] = to_codes[k][y][x];
         }
         
-        float distance = distance_modulo_pi(pixel_code, to_code, nb_values);
+        float distance = distance_modulo_pi(from_code, to_code, nb_patterns);
         
         // Si la nouvelle distance est plus petite, on update le match
         if(matches[DIST][i][j] == -1.0 || distance < matches[DIST][i][j]) {
@@ -163,18 +157,17 @@ void hash_from_codes(float*** matches, float*** from_codes, float*** to_codes,
             matches[X][i][j] = x;
             matches[Y][i][j] = y;
             matches[DIST][i][j] = distance;
-
-            if(use_heuristics) {
-                forward_matching(matches, from_codes, to_codes,
-                                 pixel_code, phases_used,
-                                 j, i, x, y);
+            
+            /* if(use_heuristics) { */
+            /*     forward_matching(matches, from_codes, to_codes, */
+            /*                      from_code, j, i, x, y); */
                 
-                backward_matching(matches, from_codes, to_codes,
-                                  to_code, phases_used,
-                                  j, i, x, y);
-            }
+            /*     backward_matching(matches, from_codes, to_codes, */
+            /*                       to_code, j, i, x, y); */
+            /* } */
         }
         
+        free(from_code);
         free(to_code);
     }
     
@@ -290,7 +283,7 @@ void lsh(float*** matches, float*** from_codes, float*** to_codes, int nb_patter
 
 int main(char argc, char** argv) {
 
-    int i, j, k, foo, shift;
+    int i, j, k, l, foo, shift;
     FILE* info = fopen("sines.txt", "r");
     
     // Check file size to avoid problems if sines.txt is empty
@@ -303,7 +296,7 @@ int main(char argc, char** argv) {
 
     int nthreads = 4, nb_iterations = 30, nb_waves, nb_shifts, disable_heuristics = 0;
     
-    float hash_table_ratio = 1.0;
+    float hash_table_ratio = 2.0;
 
     char* ref_format = "leo_%d_%d_%03d_%02d.pgm";
     char* cam_format = "%03d.pgm";
@@ -372,17 +365,46 @@ int main(char argc, char** argv) {
 
     float*** ref_codes;
     float*** cam_codes;
+
+    float* from_code = malloc(sizeof(float) * nb_patterns);
+    float* to_code = malloc(sizeof(float) * nb_patterns);
     
     cam_codes = load_codes(cam_phase_format, cam_format, 1, nb_patterns, nb_shifts, from_w, from_h);
     ref_codes = load_codes(ref_phase_format, ref_format, 0, nb_patterns, nb_shifts, to_w, to_h);
     
-    for(i=0; i<nb_iterations; i++) {
-        printf("----- Iteration %02d -----\n", i);
+    for(l=0; l<nb_iterations; l++) {
+        printf("----- Iteration %02d -----\n", l);
         lsh(matches, cam_codes, ref_codes, nb_patterns,
             // heuristics every 5 turn
-            !disable_heuristics && i % 5 == 0 && i != 0);
+            !disable_heuristics && l % 5 == 0 && l != 0);
+        
+        if(!disable_heuristics && l % 5 == 0 && l != 0) {
+            printf("----- Running backward & forward matching -----\n");
 
-        sprintf(filename, "matches-%02d.ppm", i);
+            #pragma omp parallel for private(i, j, k)
+            for(i=0; i<from_h; i++)
+                for(j=0; j<from_w; j++) {
+                    
+                    if(matches[DIST][i][j] == -1)
+                        continue;
+                    
+                    for(k=0; k<nb_patterns; k++) {
+                        from_code[k] = cam_codes[k][i][j];
+                        to_code[k] = ref_codes[k][i][j];
+                    }
+
+                    int x = matches[X][i][j];
+                    int y = matches[Y][i][j];
+
+                    forward_matching(matches, cam_codes, ref_codes,
+                                     from_code, j, i, x, y);
+                    
+                    backward_matching(matches, cam_codes, ref_codes,
+                                      to_code, j, i, x, y);
+                }
+        }
+        
+        sprintf(filename, "matches-%02d.ppm", l);
         save_color_map(filename, matches, from_w, from_h, to_w, to_h, nb_patterns * PI/2.0);
     }
 
