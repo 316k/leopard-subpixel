@@ -110,7 +110,7 @@ int main(char argc, char** argv) {
     do {
         switch(mode) {
         case REMOVE_NOISE:
-            printf("Remove noise\n");
+            fprintf(stderr, "Remove noise\n");
             break;
         case MEDIAN:
             tmp = median_filter(image, w, h, 3);
