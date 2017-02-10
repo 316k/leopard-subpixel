@@ -6,6 +6,7 @@
 #include <time.h>
 
 #include "helpers.c"
+#include "args.h"
 
 // Divide each pixel in PRECISION possible sub-pixels (with both X and Y)
 #define PRECISION 10
@@ -24,10 +25,14 @@ static inline float subpixel_value(float u, float v, float a, float b, float c, 
     return (1 - v) * ((1 - u) * a + u * b) + v * ((1 - u) * c + u * d);
 }
 
+float fsquare(float val) {
+    return val * val;
+}
+
 float unwrap(float ref, float val) {
     float diff = INFINITY;
     float new_diff;
-    
+    // FIXME : modulo 2PI seulement
     for(int i = -2; i <= 2; i++) {
         new_diff = fabs(ref - (val + i * PI));
         
@@ -58,7 +63,9 @@ float f32matrix_min(float** costs, float *u, float *v, int w, int h) {
 
 int main(char argc, char** argv) {
 
-    int nthreads = 4, i, j, k, from_w, from_h, to_w, to_h, foo, nb_shifts, nb_patterns;
+    int nthreads = 4, i, j, k, from_w, from_h, to_w, to_h, foo,
+        nb_shifts, nb_patterns, debug_surface = 0;
+    
     char* ref_format = "leo_%d_%d_%03d_%02d.pgm";
     char* cam_format = "%03d.pgm";
 
@@ -73,17 +80,22 @@ int main(char argc, char** argv) {
     fseek(info, 0, SEEK_SET);
 
     // Args parsing
-    for(i=1; i < argc - 1; i++) {
-        if(strcmp(argv[i], "-t") == 0) {
-            nthreads = atoi(argv[i + 1]); i++;
-        } else {
+    ARGBEGIN
+        LSARG_CASE('d', "debug-surface")
+        debug_surface = 1;
+
+    ARG_CASE('t')
+        nthreads = ARGI;
+    
+    WRONG_ARG
         usage:
-            printf("usage: %s [-t nb_threads=%d] filename\n",
-                   argv[0], nthreads);
-            exit(1);
-        }
-    }
-    if(i != argc - 1) goto usage;
+        printf("usage: %s [-t nb_threads=%d] [-d --debug-surface] filename\n",
+               argv0, nthreads);
+        exit(1);
+            
+    ARGEND
+
+    if(argc < 1) goto usage;
 
     omp_set_num_threads(nthreads);
     
@@ -116,6 +128,10 @@ int main(char argc, char** argv) {
     float*** ref_codes = load_codes(ref_phase_format, ref_format, 0, nb_patterns, nb_shifts, to_w, to_h);
     
     float** colormap = malloc_f32matrix(from_w, from_h);
+
+    // Up-right, Up-left, Down-right, down-left
+    int pos_x[] = {+1, -1, +1, -1};
+    int pos_y[] = {-1, -1, +1, +1};
     
     #pragma omp parallel for private(i, j, k)
     for(i=0; i<from_h; i++) {
@@ -148,10 +164,6 @@ int main(char argc, char** argv) {
             
             // Minimize subpixel value
             
-            // Up-right, Up-left, Down-right, down-left
-            int pos_x[] = {+1, -1, +1, -1};
-            int pos_y[] = {-1, -1, +1, +1};
-
             int q; // current quadrant
             
             for(q=0; q<4; q++) {
@@ -177,27 +189,44 @@ int main(char argc, char** argv) {
                         c = unwrap(m, ref_codes[k][y + pos_y[q]][x]),
                         d = unwrap(m, ref_codes[k][y + pos_y[q]][x + pos_x[q]]);
 
-                    if((m > a && m > b && m > c && m > d) ||
-                       (m < a && m < b && m < c && m < d)) {
-                        /* Si la phase matchée n'est pas dans les bornes du pixel
-                           considéré, on augmente arbitrairement le coût
-                           (influance le choix du meilleur quadrant).
-                        */
-                        for(int u=0; u<PRECISION; u++)
-                            for(int v=0; v<PRECISION; v++)
-                                costs[u][v] = 1.0;
+                    /* if((m > a && m > b && m > c && m > d) || */
+                    /*    (m < a && m < b && m < c && m < d)) { */
+                    /*     /\* Si la phase matchée n'est pas dans les bornes du pixel */
+                    /*        considéré, on augmente arbitrairement le coût */
+                    /*        (influance le choix du meilleur quadrant). *\/ */
+                    /*     for(int u=0; u<PRECISION; u++) */
+                    /*         for(int v=0; v<PRECISION; v++) */
+                    /*             costs[u][v] += 1000.0; */
 
-                        continue;
-                    }
+                    /*     continue; */
+                    /* } */
 
                     total_costs++;
                     
                     for(int u=0; u<PRECISION; u++) {
                         for(int v=0; v<PRECISION; v++) {
-                            float vall = fabsl(m - subpixel_value(u / (float)PRECISION, v / (float)PRECISION,
-                                                                  a,b,c,d));
                             
-                            costs[v][u] += vall;
+                            /* Interpolation linéaire à l'intérieur du pixel de
+                               référence et calcul de la distance au pixel
+                               de caméra */
+                            float vall;
+                            
+                            switch(q) {
+                            case 0:
+                                vall = subpixel_value(u / (float)PRECISION, v / (float)PRECISION, c,d,a,b);
+                                break;
+                            case 1:
+                                vall = subpixel_value(u / (float)PRECISION, v / (float)PRECISION, d,c,b,a);
+                                break;
+                            case 2:
+                                vall = subpixel_value(u / (float)PRECISION, v / (float)PRECISION, a,b,c,d);
+                                break;
+                            case 3:
+                                vall = subpixel_value(u / (float)PRECISION, v / (float)PRECISION, b,a,d,c);
+                                break;
+                            }
+                            
+                    costs[v][u] += fsquare(m - vall);
                         }
                     }
                 }
@@ -206,6 +235,20 @@ int main(char argc, char** argv) {
                 
                 decalage_x[q] = pos_x[q] * decalage_x[q] / (2.0 * PRECISION) + 0.5;
                 decalage_y[q] = pos_y[q] * decalage_y[q] / (2.0 * PRECISION) + 0.5;
+
+                if(debug_surface) {
+                    char debug_filename[50];
+                    sprintf(debug_filename, "debug/%d-%d-%d", x, y, q);
+                    FILE *debug = fopen(debug_filename, "w");
+
+                    for(int u=0; u<PRECISION; u++) {
+                        for(int v=0; v<PRECISION; v++) {
+                            fprintf(debug, "%f ", costs[u][v]);
+                        }
+                        fputc('\n', debug);
+                    }
+                    fclose(debug);
+                }
             }
             
             free(match);
