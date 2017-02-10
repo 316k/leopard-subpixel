@@ -89,7 +89,8 @@ char forward_matching(float*** matches, float*** from_codes, float*** to_codes,
  * the matched *from* pixel
  */
 void backward_matching(float*** matches, float*** from_codes, float*** to_codes,
-                       float* to_code, int from_x, int from_y, int to_x, int to_y) {
+                       float* to_code, int from_x, int from_y,
+                       int to_x, int to_y) {
     
     float* from_code = malloc(sizeof(float) * nb_patterns);
     
@@ -106,7 +107,7 @@ void backward_matching(float*** matches, float*** from_codes, float*** to_codes,
             float distance = distance_modulo_pi(from_code, to_code, nb_patterns);
             
             // Si la nouvelle distance est plus petite, on update le match
-            if(distance == -1.0 || distance < matches[DIST][i][j]) {                
+            if(distance == -1.0 || distance < matches[DIST][i][j]) {
                 matches[X][i][j]    = to_x;
                 matches[Y][i][j]    = to_y;
                 matches[DIST][i][i] = distance;
@@ -174,8 +175,8 @@ void hash_from_codes(float*** matches, float*** from_codes, float*** to_codes,
     free(pixel_code);
 }
 
-void lsh(float*** matches, float*** from_codes, float*** to_codes, int nb_patterns,
-         char use_heuristics) {
+void lsh(float*** matches, float*** from_codes, float*** to_codes,
+         int nb_patterns, char use_heuristics) {
     
     int i, j, k, l;
     //int nb_values = 3; // (inexact->integer (ceiling (/ nb-patterns 2))))
@@ -342,14 +343,18 @@ int main(char argc, char** argv) {
     
     srand(time(NULL));
     
-    fscanf(info, "%d %d %d %d %d", &to_w, &to_h, &nb_waves, &nb_patterns, &nb_shifts);
+    fscanf(info, "%d %d %d %d %d",
+           &to_w, &to_h, &nb_waves, &nb_patterns, &nb_shifts);
 
     fclose(info);
     
-    hash_divider = floor((powf(nb_boxes, nb_values) / (to_w * to_h)) / hash_table_ratio);
+    hash_divider = floor((powf(nb_boxes, nb_values) / (to_w * to_h))
+                         / hash_table_ratio);
     hash_table_size = (int) ceil(powf(nb_boxes, nb_values) / hash_divider);
 
-    printf("hash_table_size=%d (%f times bigger than %d)\n", hash_table_size, hash_table_size /(float)(to_w * to_h), to_w * to_h);
+    printf("hash_table_size=%d (%f times bigger than %d)\n",
+           hash_table_size, hash_table_size /(float)(to_w * to_h),
+           to_w * to_h);
     
     // Lecture d'une image pour trouver le from_w, from_h
     sprintf(filename, cam_format, 0);
@@ -377,7 +382,8 @@ int main(char argc, char** argv) {
         lsh(matches, cam_codes, ref_codes, nb_patterns,
             // heuristics every 5 turn
             !disable_heuristics && l % 5 == 0 && l != 0);
-        
+
+        // Launch heuristics
         if(!disable_heuristics && l % 5 == 0 && l != 0) {
             printf("----- Running backward & forward matching -----\n");
 
@@ -403,9 +409,11 @@ int main(char argc, char** argv) {
                                       to_code, j, i, x, y);
                 }
         }
-        
+
+        // Save the iteration
         sprintf(filename, "matches-%02d.ppm", l);
-        save_color_map(filename, matches, from_w, from_h, to_w, to_h, nb_patterns * PI/2.0);
+        save_color_map(filename, matches,
+                       from_w, from_h, to_w, to_h, nb_patterns * PI/2.0);
     }
 
     return EXIT_SUCCESS;
