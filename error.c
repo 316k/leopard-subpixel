@@ -34,32 +34,32 @@ int main(char argc, char** argv) {
         printf("usage: %s [-c] [-t nb_threads=%d] [-l threshold=%f] ref.ppm test.ppm\n",
                argv0, nthreads, threshold);
         exit(1);
-    
+
     ARGEND
 
     if(argc < 2)
         goto usage;
-    
+
     float*** ref = load_ppm(argv[0], &w, &h);
     float*** test = load_ppm(argv[1], &w, &h);
 
     double val;
-    
+
     for(k=0; k < 2; k++) {
         for(i=0; i < h; i++)
             for(j=0; j<w; j++) {
-                
+
                 ref[k][i][j] = ref[k][i][j] / 65535.0 * (k == 0 ? w : h) + (center ? 0.5 : 0);
                 test[k][i][j] = test[k][i][j] / 65535.0 * (k == 0 ? w : h);
 
                 val = fabsl(ref[k][i][j] - test[k][i][j]);
-                
+
                 if(val > threshold)
                     printf("bad %c %f %f %f\n", k == 0 ? 'X' : 'Y', ref[k][i][j], test[k][i][j], val);
                 else
                     printf("ok %c %f %f %f\n", k == 0 ? 'X' : 'Y', ref[k][i][j], test[k][i][j], val);
             }
     }
-    
+
     return 0;
 }

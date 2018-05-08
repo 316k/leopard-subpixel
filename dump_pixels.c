@@ -30,17 +30,17 @@ int main(char argc, char** argv) {
         usage:
         printf("usage: %s [-t nb_threads=%d] a.pgm [b.pgm ...]\n", argv0);
         exit(1);
-    
+
     ARGEND
 
     if(argc < 1)
         goto usage;
-    
+
     float*** imgs = malloc(sizeof(float**) * argc);
 
     for(i=0; i<argc; i++)
         imgs[i] = load_pgm(argv[i], &w, &h);
-    
+
     for(i=0; i < h; i++)
         for(j=0; j<w; j++) {
             printf("% 3d % 3d ", j, i);
@@ -51,6 +51,6 @@ int main(char argc, char** argv) {
             putchar(8); // backspace last char
             putchar('\n');
         }
-    
+
     return 0;
 }

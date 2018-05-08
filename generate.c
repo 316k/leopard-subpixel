@@ -39,7 +39,7 @@ int main(char argc, char** argv) {
 
     // Init image matrix
     float** image = malloc_f32matrix(w, h);
-    
+
     float base_freq = 0.1;
     float* phases = malloc(sizeof(float) * nb_waves);
     float* angles = malloc(sizeof(float) * nb_waves);
@@ -49,10 +49,10 @@ int main(char argc, char** argv) {
 
     FILE* info = fopen("sines.txt", "w+");
     fprintf(info, "%d %d %d %d %d\n", w, h, nb_waves, nb_patterns, nb_shifts);
-    
+
     for(int n=0; n < nb_patterns; n++) {
         printf("Rendering pattern %03d\n", n);
-        
+
         for(i=0; i<nb_waves; i++) {
             phases[i] = rand()/(float)RAND_MAX * 2 * PI;
             angles[i] = rand()/(float)RAND_MAX * PI;
@@ -64,23 +64,23 @@ int main(char argc, char** argv) {
             fprintf(info, "\n");
 
         float*** intensities = malloc_f32cube(nb_shifts, w, h);
-        
+
         for(int shift=0; shift < nb_shifts; shift++) {
             memset(image[0], 0, sizeof(float) * h * w);
-            
+
             // Cos addition
             for(int wave = 0; wave < nb_waves; wave++) {
                 #pragma omp parallel for private(i, j)
                 for(i=0; i < h; i++) {
                     for(j=0; j < w; j++) {
-                        
+
                         float fx, fy, phase;
-                        
+
                         fx = freqs[wave] * sin(angles[wave]);
                         fy = freqs[wave] * cos(angles[wave]);
-                        
+
                         phase = phases[wave] + shift * 2.0 * PI / (float) nb_shifts;
-                        
+
                         image[i][j] += 2*cosf(fy * i + fx * j + phase);
                     }
                 }
@@ -101,11 +101,11 @@ int main(char argc, char** argv) {
         char filename[30];
         sprintf(filename, "phase_ref_%d_%d_%03d.pgm", w, h, n);
         save_phase(intensities, filename, nb_shifts, w, h);
-        
+
         free_f32cube(intensities, nb_shifts);
     }
 
     fclose(info);
-    
+
     return EXIT_SUCCESS;
 }
