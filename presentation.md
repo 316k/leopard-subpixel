@@ -18,7 +18,7 @@
 
 # Techniques existantes
 
-| **Léopard discret**                   | **Phase-shift**                       |
+| **Léopard**                           | **Phase-shift**                       |
 |---------------------------------------+---------------------------------------|
 | Lumière non-structurée                | Lumière structurée                    |
 | Très Robuste                          | Relativement robuste                  |
@@ -207,7 +207,6 @@ Positions en sous-pixel détectée après interpolation :
 
 - Encore des améliorations possibles
     * Détection automatique du nombre d'itérations de LSH à effectuer
-    * Descente de gradient plutôt qu'un *brute force* du coût des sous-pixels possibles
 - À tester sur le terrain
     * Performances vs. d'autres algos de reconstruction active sous-pixellique
 - Plus de tests & plus de rigueur $\rightarrow$ publication d'un article plutôt intéressant
