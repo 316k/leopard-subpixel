@@ -51,7 +51,7 @@ void read_image_header(FILE* f, int *w, int *h, int *size) {
     // "w h" or "#" (comment)
     fgets(foo, 100, f);
 
-    while(strcmp(foo, "#\n") == 0)
+    while(foo[0] == '#')
         fgets(foo, 100, f);
 
     sscanf(foo, "%d %d", w, h);
@@ -100,7 +100,7 @@ float** load_pgm(char* name, int *w, int *h) {
 float*** load_ppm(char* name, int *w, int *h) {
 
     int i, j, k, v, size;
-    float*** mat = malloc(sizeof(float**) * 3); // R,G,V channels
+    float*** mat = malloc(sizeof(float**) * 3); // R,G,B channels
     char foo[100];
     FILE *f = fopen(name, "r");
     
