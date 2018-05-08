@@ -1,11 +1,11 @@
 #!/bin/bash
+# Crée l'image de référence du "cube"
+
 angle=-20
 img=ref.ppm
 sine=`convert xc: -format "%[fx:sin( $angle *pi/180)]" info:`
-            #
 
-            # -flip \
-                # Create some square images for the cube
+# Create some square images for the cube
 convert $img -resize 750x750^ -depth 16 -gravity center -extent 750x750 top.png
 convert $img -resize 750x750 -depth 16 left.png
 convert $img -resize 750x750 -depth 16 right.png
@@ -32,3 +32,5 @@ convert left_shear.png right_shear.png +append \
         +distort AffineProjection "1,$sine,0,1,0,0" +repage \
         +distort barrel "0 0 -0.25" \
         -depth 16 cube-ref.ppm
+
+rm top.png left.png right.png top_shear.png left_shear.png right_shear.png

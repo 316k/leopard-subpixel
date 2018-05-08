@@ -1,9 +1,9 @@
 #!/bin/bash
+# Transforme les images leo...pgm en les déformant en un "cube" avec
+# du bruit. Utile pour les tests synthétiques.
+
 angle=-20
 sine=`convert xc: -format "%[fx:sin( $angle *pi/180)]" info:`
-            #
-
-            # -flip \
 
 i=0
 for img in leo*.pgm
@@ -41,4 +41,6 @@ do
     
     let i++
 done
+
+rm top.png left.png right.png top_shear.png left_shear.png right_shear.png
 rm -f phase*.pgm
