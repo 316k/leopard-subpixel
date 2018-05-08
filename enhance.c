@@ -1,3 +1,7 @@
+/*
+  Utils to post-process the generated LUT
+  (TODO : remove median filter, use imagemagick instead)
+ */
 #include <stdlib.h>
 #include <stdio.h>
 #include <omp.h>
