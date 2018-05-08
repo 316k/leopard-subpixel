@@ -1,3 +1,8 @@
+/*
+  Compare two LUT that should encode the same thing and show the error
+  between them
+  (TODO : remove threshold and bad/ok stuff, use awk instead)
+ */
 #include <stdlib.h>
 #include <stdio.h>
 #include <omp.h>
