@@ -8,7 +8,7 @@ You'll need `gcc` to build these programs
 
 ```bash
 for i in generate solve subpixel enhance translation subpixel-reference \
-         error validate dump_pixels split-ppm join-ppm
+         error validate dump_pixels
 do
     gcc -g $i.c -fopenmp -lm -o $i
 done

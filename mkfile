@@ -7,7 +7,7 @@ H=1080
 ITERATIONS=66
 
 .all:V: generate solve subpixel enhance translation subpixel-reference \
-        error validate dump_pixels split-ppm join-ppm
+        error validate dump_pixels
 
 reset:V: clean-cam
 	rm -f {leo,phase_ref}*.pgm sines.txt tmp.log *.png
@@ -17,7 +17,7 @@ clean-cam:V:
 
 clean-all:V: reset clean-cam
     rm -f generate solve subpixel enhance translation subpixel-reference \
-       error validate dump_pixels split-ppm join-ppm
+       error validate dump_pixels
     rm -f cube-ref.ppm
 
 sines.txt: generate

@@ -1,18 +1,21 @@
+*.pyc
+
 ./*.pgm
+./*.ppm
 tests/translation/*png
-*.ppm
 sines.txt
 presentation.pdf
 
 # Binaries
-generate
-solve
-subpixel
-enhance
-translation
-subpixel-reference
-error
-validate
-dump_pixels
-split-ppm
-join-ppm
+./generate
+./solve
+./subpixel
+./enhance
+./translation
+./subpixel-reference
+./error
+./validate
+./dump_pixels
+utils/flip-lut
+utils/split-ppm
+utils/join-ppm
