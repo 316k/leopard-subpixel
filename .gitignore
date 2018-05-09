@@ -1,3 +1,18 @@
-*.pgm
+./*.pgm
+tests/translation/*png
 *.ppm
 sines.txt
+presentation.pdf
+
+# Binaries
+generate
+solve
+subpixel
+enhance
+translation
+subpixel-reference
+error
+validate
+dump_pixels
+split-ppm
+join-ppm
