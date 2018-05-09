@@ -5,6 +5,7 @@
 #include <math.h>
 #include <time.h>
 
+#include "args.h"
 #include "helpers.c"
 
 int main(char argc, char** argv) {
@@ -13,28 +14,32 @@ int main(char argc, char** argv) {
         nb_waves = 32, nb_shifts = 3,
         nb_patterns = 40;
 
-    // Args parsing
-    for(i=1; i < argc; i++) {
-        if(strcmp(argv[i], "-t") == 0) {
-            nthreads = atoi(argv[i + 1]); i++;
-        } else if(strcmp(argv[i], "-w") == 0) {
-            w = atoi(argv[i + 1]); i++;
-        } else if(strcmp(argv[i], "-h") == 0) {
-            h = atoi(argv[i + 1]); i++;
-        } else if(strcmp(argv[i], "-q") == 0) {
-            nb_waves = atoi(argv[i + 1]); i++;
-        } else if(strcmp(argv[i], "-s") == 0) {
-            nb_shifts = atoi(argv[i + 1]); i++;
-        } else if(strcmp(argv[i], "-n") == 0) {
-            nb_patterns = atoi(argv[i + 1]); i++;
-        } else {
+    ARGBEGIN
+        ARG_CASE('t')
+        nthreads = ARGI;
+
+    ARG_CASE('w')
+        w = ARGI;
+
+    ARG_CASE('h')
+        h = ARGI;
+
+    ARG_CASE('q')
+        nb_waves = ARGI;
+
+    ARG_CASE('s')
+        nb_shifts = ARGI;
+
+    ARG_CASE('n')
+        nb_patterns = ARGI;
+
+    WRONG_ARG
             printf("usage: %s [-t nb_threads=%d] [-w width=%d] [-h height=%d]\n"
-                   "\t\t[-q nb_waves=%d] [-s nb_shifts=%d] [-n nb_patterns=%d]\n", argv[0],
+                   "\t\t[-q nb_waves=%d] [-s nb_shifts=%d] [-n nb_patterns=%d]\n", argv0,
                    nthreads, w, h, nb_waves, nb_shifts, nb_patterns);
             exit(0);
-        }
-    }
 
+    ARGEND
     omp_set_num_threads(nthreads);
 
     // Init image matrix
