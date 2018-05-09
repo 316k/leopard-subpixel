@@ -1,3 +1,6 @@
+/*
+  "Flips" an image point-of-view according to a given LUT
+*/
 #include <stdlib.h>
 #include <stdio.h>
 #include <omp.h>
@@ -20,14 +23,14 @@ int main(char argc, char** argv) {
     ARGBEGIN
     ARG_CASE('t')
         nthreads = ARGI;
-        
+
     ARG_CASE('p')
         threshold = ARGF;
 
     WRONG_ARG
         usage:
-        printf("usage: %s [-t nthreads=%d] [-p threshold=0.5] cam-img.pgm proj-lut.ppm > out.ppm\n",
-               argv0, nthreads);
+        printf("usage: %s [-t nthreads=%d] [-p err_threshold=%0.3f] cam-img.pgm proj-lut.ppm > out.pgm\n",
+               argv0, nthreads, threshold);
         exit(1);
     ARGEND
 
@@ -45,7 +48,7 @@ int main(char argc, char** argv) {
     float*** lut = load_ppm(proj_lut_name, &lut_w, &lut_h);
     float** out = malloc_f32matrix(lut_w, lut_h);
 
-    // Pour chaque pixel du lut, trouver l'équivalent dans l'image
+    // Pour chaque pixel de la LUT, trouver l'équivalent dans l'image
     #pragma omp parallel for private(i, j)
     for(i=0; i<lut_h; i++)
         for(j=0; j<lut_w; j++) {
