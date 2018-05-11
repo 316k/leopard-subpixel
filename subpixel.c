@@ -1,3 +1,7 @@
+/*
+  Compute a subpixel-accurate LUT from a pixel-accurate LUT and phases
+  references
+*/
 #include <stdlib.h>
 #include <stdio.h>
 #include <omp.h>
@@ -25,14 +29,14 @@ static inline float subpixel_value(float u, float v, float a, float b, float c, 
     return (1 - v) * ((1 - u) * a + u * b) + v * ((1 - u) * c + u * d);
 }
 
-float fsquare(float val) {
+static inline float fsquare(float val) {
     return val * val;
 }
 
 float unwrap(float ref, float val) {
     float diff = INFINITY;
     float new_diff;
-    // FIXME : modulo 2PI seulement
+    // FIXME ? : modulo 2PI seulement
     for(int i = -2; i <= 2; i++) {
         new_diff = fabs(ref - (val + i * PI));
 
@@ -64,10 +68,37 @@ float f32matrix_min(float** costs, float *u, float *v, int w, int h) {
 int main(char argc, char** argv) {
 
     int nthreads = 4, i, j, k, from_w, from_h, to_w, to_h, foo,
-        nb_shifts, nb_patterns, debug_surface = 0;
+        nb_shifts, nb_patterns, debug_surface = 0, verbose = 0;
 
     char* ref_format = "leo_%d_%d_%03d_%02d.pgm";
     char* cam_format = "%03d.pgm";
+
+    // Args parsing
+    ARGBEGIN
+
+    LSARG_CASE('d', "debug-surface")
+        debug_surface = 1;
+
+    LSARG_CASE('v', "verbose")
+        verbose = 1;
+
+    ARG_CASE('t')
+        nthreads = ARGI;
+
+    WRONG_ARG
+        usage:
+        printf("usage: %s [-t nb_threads=%d] [-d --debug-surface] [-v --verbose] filename\n",
+               argv0, nthreads);
+    exit(1);
+
+    ARGEND
+
+    if(argc < 1) goto usage;
+
+    omp_set_num_threads(nthreads);
+
+    srand(time(NULL));
+
 
     FILE* info = fopen("sines.txt", "r");
 
@@ -78,28 +109,6 @@ int main(char argc, char** argv) {
         exit(-1);
     }
     fseek(info, 0, SEEK_SET);
-
-    // Args parsing
-    ARGBEGIN
-        LSARG_CASE('d', "debug-surface")
-        debug_surface = 1;
-
-    ARG_CASE('t')
-        nthreads = ARGI;
-
-    WRONG_ARG
-        usage:
-        printf("usage: %s [-t nb_threads=%d] [-d --debug-surface] filename\n",
-               argv0, nthreads);
-        exit(1);
-
-    ARGEND
-
-    if(argc < 1) goto usage;
-
-    omp_set_num_threads(nthreads);
-
-    srand(time(NULL));
 
     fscanf(info, "%d %d %d %d %d", &to_w, &to_h, &foo, &nb_patterns, &nb_shifts);
     fclose(info);
@@ -129,13 +138,26 @@ int main(char argc, char** argv) {
 
     float** colormap = malloc_f32matrix(from_w, from_h);
 
-    // Up-right, Up-left, Down-right, down-left
-    int pos_x[] = {+1, -1, +1, -1};
-    int pos_y[] = {-1, -1, +1, +1};
+    // Up-right, Down-right, Down-left, Up-left
+    int pos_x[] = {+1, +1, -1, -1};
+    int pos_y[] = {-1, +1, +1, -1};
+
+    int progress_bar_increment = from_h / 50;
+
+    if(verbose && progress_bar_increment) {
+        // Progress-bar
+        for(i=0; i<from_h; i += progress_bar_increment) {
+            fprintf(stderr, ".", i);
+        }
+        fprintf(stderr, "\n");
+    }
 
     #pragma omp parallel for private(i, j, k)
     for(i=0; i<from_h; i++) {
-        printf("%d\n", i);
+
+        if(verbose && progress_bar_increment && i % progress_bar_increment == 0)
+            fprintf(stderr, ".");
+
         for(j=0; j<from_w; j++) {
 
             int x = matches[X][i][j];
@@ -179,29 +201,14 @@ int main(char argc, char** argv) {
                     for(int v=0; v<PRECISION; v++)
                         costs[u][v] = 0.0;
 
-                int total_costs = 0;
-
                 for(k=0; k<nb_patterns; k++) {
 
+                    // TODO : Check this
                     float m = match[k],
                         a = unwrap(m, ref_codes[k][y][x]),
                         b = unwrap(m, ref_codes[k][y][x + pos_x[q]]),
                         c = unwrap(m, ref_codes[k][y + pos_y[q]][x]),
                         d = unwrap(m, ref_codes[k][y + pos_y[q]][x + pos_x[q]]);
-
-                    /* if((m > a && m > b && m > c && m > d) || */
-                    /*    (m < a && m < b && m < c && m < d)) { */
-                    /*     /\* Si la phase matchée n'est pas dans les bornes du pixel */
-                    /*        considéré, on augmente arbitrairement le coût */
-                    /*        (influance le choix du meilleur quadrant). *\/ */
-                    /*     for(int u=0; u<PRECISION; u++) */
-                    /*         for(int v=0; v<PRECISION; v++) */
-                    /*             costs[u][v] += 1000.0; */
-
-                    /*     continue; */
-                    /* } */
-
-                    total_costs++;
 
                     for(int u=0; u<PRECISION; u++) {
                         for(int v=0; v<PRECISION; v++) {
@@ -209,34 +216,24 @@ int main(char argc, char** argv) {
                             /* Interpolation linéaire à l'intérieur du pixel de
                                référence et calcul de la distance au pixel
                                de caméra */
-                            float vall;
+                            float vall = subpixel_value(u/(float)(PRECISION - 1), v/(float)(PRECISION - 1), a, b, c, d);
 
-                            switch(q) {
-                            case 0:
-                                vall = subpixel_value(u / (float)PRECISION, v / (float)PRECISION, c,d,a,b);
-                                break;
-                            case 1:
-                                vall = subpixel_value(u / (float)PRECISION, v / (float)PRECISION, d,c,b,a);
-                                break;
-                            case 2:
-                                vall = subpixel_value(u / (float)PRECISION, v / (float)PRECISION, a,b,c,d);
-                                break;
-                            case 3:
-                                vall = subpixel_value(u / (float)PRECISION, v / (float)PRECISION, b,a,d,c);
-                                break;
-                            }
-
-                    costs[v][u] += fsquare(m - vall);
+                            // TODO : fabs (L1) semble donner des plus
+                            // beaux résultats que fsquare (L2), à vérifier
+                            costs[v][u] += fabs(m - vall);
                         }
                     }
                 }
 
                 quadrant_best[q] = f32matrix_min(costs, &decalage_x[q], &decalage_y[q], PRECISION, PRECISION);
 
-                decalage_x[q] = pos_x[q] * decalage_x[q] / (2.0 * PRECISION) + 0.5;
-                decalage_y[q] = pos_y[q] * decalage_y[q] / (2.0 * PRECISION) + 0.5;
+                /* decalage_x[q] = pos_x[q] * decalage_x[q] / (2.0 * PRECISION) + 0.5; */
+                /* decalage_y[q] = pos_y[q] * decalage_y[q] / (2.0 * PRECISION) + 0.5; */
 
-                if(debug_surface) {
+                decalage_x[q] = pos_x[q] * decalage_x[q]/((float)PRECISION - 1) + 0.5;
+                decalage_y[q] = pos_y[q] * decalage_y[q]/((float)PRECISION - 1) + 0.5;
+
+                if(debug_surface && rand()/(float)RAND_MAX < 0.0001) {
                     char debug_filename[50];
                     sprintf(debug_filename, "debug/%d-%d-%d", x, y, q);
                     FILE *debug = fopen(debug_filename, "w");
@@ -255,30 +252,31 @@ int main(char argc, char** argv) {
             free_f32matrix(costs);
 
             // Trouve le meilleur match de sous-pixel
-            float min = INFINITY;
-            int index = -1, equals = 0;
-            for(k=0; k<4; k++) {
+            float min = quadrant_best[0];
+            int index = 0, equals = 0;
+            for(k=1; k<4; k++) {
                 if(quadrant_best[k] < min) {
                     min = quadrant_best[k];
                     index = k;
                     equals = 0;
-                } else if(quadrant_best[k] == min) {
+                } else if(quadrant_best[k] == 0) { // TODO : fabs(quadrant_best[k] - min) < 1e-6) { // good epsilon ?
                     equals++;
                 }
+
+                /* if(quadrant_best[k] != 0) { */
+                /*     printf("%f\n", quadrant_best[k]); */
+                /* } */
             }
 
             if(index != -1) {
                 colormap[i][j] = index;
 
-                if(equals)
-                    colormap[i][j] = 5;
+                if(equals) {
+                    colormap[i][j] = 4;
+                }
 
                 subpixel[X][i][j] = decalage_x[index];
                 subpixel[Y][i][j] = decalage_y[index];
-            } else {
-                subpixel[X][i][j] = 0.5;
-                subpixel[Y][i][j] = 0.5;
-                colormap[i][j] = 4;
             }
 
             // Keep distance information
@@ -289,12 +287,16 @@ int main(char argc, char** argv) {
         }
     }
 
+    if(verbose)
+        fprintf(stderr, "\n");
+
     FILE* vals;
 
+    // Statistics
     for(k=0; k<2; k++) {
-        float min = 100000;
-        float dec = 0;
-        float max = -100000;
+        float min = INFINITY; // TODO : ?
+        float avg = 0, abs_avg = 0;
+        float max = -INFINITY;
 
         if(k == 0)
             vals = fopen("subpixel-x-vals", "w");
@@ -303,68 +305,71 @@ int main(char argc, char** argv) {
 
         for(i=1; i<from_h-1; i++)
             for(j=1; j<from_w-1; j++) {
-                dec += subpixel[k][i][j] - matches[k][i][j];
+                avg += subpixel[k][i][j] - matches[k][i][j];
+                abs_avg += fabs(subpixel[k][i][j] - matches[k][i][j]);
                 min = fmin(min, subpixel[k][i][j] - matches[k][i][j]);
                 max = fmax(max, subpixel[k][i][j] - matches[k][i][j]);
                 fprintf(vals, "%d %f\n", (int)colormap[i][j], subpixel[k][i][j] - matches[k][i][j]);
             }
 
-        dec /= (from_h - 2) * (from_w - 2);
-        fprintf(stderr, "avg=%f min=%f max=%f\n", dec, min, max);
+        avg /= (from_h - 2) * (from_w - 2);
+        abs_avg /= (from_h - 2) * (from_w - 2);
+        printf("avg=%f abs_avg=%f min=%f max=%f\n", avg, abs_avg, min, max);
         fclose(vals);
     }
 
-    float*** out_colormap = malloc_f32cube(3, from_w, from_h);
-    for(i=0; i<from_h; i++) {
-        for(j=0; j<from_w; j++) {
+    if(debug_surface) {
+        // TODO : Base la colormap sur la position du sous-pixel dans le
+        // pixel plutôt que sur le diff avec l'image originale : la
+        // méthode peut possiblement corriger un mauvais match, donc
+        // certains pixels se retrouvent avec un déplacement > 1 pixel, ce
+        // qui rend la colormap incompréhensible
+        float*** out_colormap = malloc_f32cube(3, from_w, from_h);
+        for(i=0; i<from_h; i++) {
+            for(j=0; j<from_w; j++) {
 
-            /* Code :
-               No match = White
-               Up-right = R
-               Up-left = G
-               Down-right = B
-               Down-left = Cyan
-               Multiple choices = Fuchsia
-               No subpixel = Black
-            */
-            switch((int) colormap[i][j]) {
-            case -1:
-                out_colormap[0][i][j] = out_colormap[1][i][j] = out_colormap[2][i][j] = 255;
-                break;
+                /* Code :
+                   -1 = No match = White
+                   0 = Up-right = R
+                   1 = Down-right = G
+                   2 = Down-left = B
+                   3 = Up-left = Cyan
+                   4 = Multiple choices (center) = Black
+                */
+                switch((int) colormap[i][j]) {
+                case -1:
+                    out_colormap[0][i][j] = out_colormap[1][i][j] = out_colormap[2][i][j] = 255;
+                    break;
 
-            case 0:
-                out_colormap[1][i][j] = out_colormap[2][i][j] = 0;
-                out_colormap[0][i][j] = 255;
-                break;
+                case 0:
+                    out_colormap[1][i][j] = out_colormap[2][i][j] = 0;
+                    out_colormap[0][i][j] = 255;
+                    break;
 
-            case 1:
-                out_colormap[0][i][j] = out_colormap[2][i][j] = 0;
-                out_colormap[1][i][j] = 255;
-                break;
+                case 1:
+                    out_colormap[0][i][j] = out_colormap[2][i][j] = 0;
+                    out_colormap[1][i][j] = 255;
+                    break;
 
-            case 2:
-                out_colormap[0][i][j] = out_colormap[1][i][j] = 0;
-                out_colormap[2][i][j] = 255;
-                break;
+                case 2:
+                    out_colormap[0][i][j] = out_colormap[1][i][j] = 0;
+                    out_colormap[2][i][j] = 255;
+                    break;
 
-            case 3:
-                out_colormap[1][i][j] = out_colormap[2][i][j] = 255;
-                out_colormap[0][i][j] = 0;
-                break;
+                case 3:
+                    out_colormap[1][i][j] = out_colormap[2][i][j] = 255;
+                    out_colormap[0][i][j] = 0;
+                    break;
 
-
-            case 4:
-                out_colormap[0][i][j] = out_colormap[1][i][j] = out_colormap[2][i][j] = 0;
-                break;
-
-            case 5:
-                out_colormap[0][i][j] = out_colormap[2][i][j] = 255;
-                out_colormap[1][i][j] = 0;
-                break;
+                case 4:
+                    out_colormap[0][i][j] = out_colormap[1][i][j] = out_colormap[2][i][j] = 0;
+                    break;
+                }
             }
         }
+
+        save_ppm("debug-subpixel.ppm", out_colormap, from_w, from_h, 8);
     }
-    save_ppm("debug-subpixel.ppm", out_colormap, from_w, from_h, 8);
 
     save_color_map("subpixel.ppm", subpixel, from_w, from_h, to_w, to_h, nb_patterns * PI/2.0);
 
