@@ -56,8 +56,8 @@ int main(char argc, char** argv) {
 
     WRONG_ARG
         usage:
-        printf("usage: %s [-t nb_threads=%d] [-x del-x=%f]\n"
-               "\t[-y del-y=%f] image.pgm > out.pgm\n",
+        printf("usage: %s [-t nb_threads=%d] [-x delta_x=%f]\n"
+               "\t[-y delta_y=%f] image.pgm > out.pgm\n",
                argv0, nthreads, x, y);
         exit(1);
 
