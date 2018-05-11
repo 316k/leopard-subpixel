@@ -25,16 +25,16 @@ void free_f32matrix(float** image) {
 
 float*** malloc_f32cube(int w, int h, int k) {
     float*** cube = malloc(sizeof(float**) * w);
-    
+
     for(int i=0; i<w; i++) {
         cube[i] = malloc_f32matrix(h, k);
     }
-    
+
     return cube;
 }
 
 void free_f32cube(float*** cube, int k) {
-    
+
     for(int i=0; i < k; i++) {
         free_f32matrix(cube[i]);
     }
@@ -57,7 +57,7 @@ void read_image_header(FILE* f, int *w, int *h, int *size) {
     sscanf(foo, "%d %d", w, h);
 
     fgets(foo, 100, f);
-    
+
     sscanf(foo, "%d", size);
 }
 
@@ -65,19 +65,19 @@ float** load_pgm(char* name, int *w, int *h) {
     int i, j, v, size;
     float** mat;
     FILE *f = fopen(name, "r");
-    
+
     if(f == NULL) {
         printf("%s: No such file or directory\n", name);
         exit(1);
     }
 
     read_image_header(f, w, h, &size);
-    
+
     size = size == 65535 ? 2 : 1;
 
     // Read
     mat = malloc_f32matrix(*w, *h);
-    
+
     for(i=0; i < *h; i++)
         for(j=0; j < *w; j++) {
             if(size == 2) {
@@ -91,9 +91,9 @@ float** load_pgm(char* name, int *w, int *h) {
 
             mat[i][j] = v;
         }
-    
+
     fclose(f);
-    
+
     return mat;
 }
 
@@ -103,20 +103,20 @@ float*** load_ppm(char* name, int *w, int *h) {
     float*** mat = malloc(sizeof(float**) * 3); // R,G,B channels
     char foo[100];
     FILE *f = fopen(name, "r");
-    
+
     if(f == NULL) {
         printf("%s: No such file or directory\n", name);
         exit(1);
     }
 
     read_image_header(f, w, h, &size);
-    
+
     size = size == 65535 ? 2 : 1;
 
     // Read
     for(i=0; i<3; i++)
         mat[i] = malloc_f32matrix(*w, *h);
-    
+
     for(i=0; i < *h; i++)
         for(j=0; j < *w; j++) {
             for(k=0; k<3; k++) {
@@ -128,13 +128,13 @@ float*** load_ppm(char* name, int *w, int *h) {
                 } else {
                     v = getc(f);
                 }
-                
+
                 mat[k][i][j] = v;
             }
         }
-    
+
     fclose(f);
-    
+
     return mat;
 }
 
@@ -154,7 +154,7 @@ void save_pgm(char* filename, float** image, int w, int h, int depth) {
         for(j=0; j<w; j++) {
 
             v = image[i][j];
-            
+
             if(v > max || v < 0.0) {
                 fprintf(stderr, "*** WARNING : (%d, %d) = %f\n", i, j, image[i][j]);
                 v = fmin(fmax(v, 0), max);
@@ -177,7 +177,7 @@ void save_pgm(char* filename, float** image, int w, int h, int depth) {
 void save_ppm(char* filename, float** channels[3], int w, int h, int depth) {
     int i, j, k, v;
     int max = depth == 16 ? 65535 : 255;
-    
+
     FILE* out;
 
     if(filename != NULL)
@@ -191,7 +191,7 @@ void save_ppm(char* filename, float** channels[3], int w, int h, int depth) {
 
             for(k=0; k<3; k++) {
                 v = channels[k][i][j];
-            
+
                 if(v > max || v < 0) {
                     fprintf(stderr, "*** WARNING : (%d, %d) = %f [channel=%d]\n", i, j, channels[k][i][j], k);
                     v = fmin(fmax(v, 0), max);
@@ -230,7 +230,7 @@ int* random_phases(int size, int total) {
         list[i] = list[j];
         list[j] = swap;
     }
-    
+
     int* out = malloc(sizeof(int) * size);
 
     for(i=0; i<size; i++) {
@@ -244,7 +244,7 @@ int* random_phases(int size, int total) {
 
 float solve_phase_term(float* intensities, int nb_shifts, float (*trigo)(float)) {
     float total = 0;
-    
+
     for(int i=0; i<nb_shifts; i++) {
         total += trigo(2 * i * PI /(float) nb_shifts) * intensities[i];
     }
@@ -265,10 +265,10 @@ float modulo_sub_pi(float x, float y) {
 
 float distance_modulo_pi(float* a, float* b, int len) {
     float total = 0;
-    
+
     for(int i=0; i<len; i++)
         total += modulo_sub_pi(a[i], b[i]);
-    
+
     return total;
 }
 
@@ -657,7 +657,7 @@ float*** load_codes(char* phase_format, char* img_format, char numbered_imgs,
         // If phase has already been computed, load it from the pgm file
         if(access(filename, F_OK) != -1) {
             codes[k] = load_pgm(filename, &w, &h);
-            
+
             for(int i=0; i < h; i++) {
                 for(int j=0; j < w; j++) {
                     codes[k][i][j] = codes[k][i][j] / 65535.0 * 2 * PI - PI;
@@ -667,7 +667,7 @@ float*** load_codes(char* phase_format, char* img_format, char numbered_imgs,
 
             float*** intensities = malloc(sizeof(float**) * nb_shifts);
             float** image = malloc_f32matrix(w, h);
-        
+
             #pragma omp parallel for
             for(int shift=0; shift < nb_shifts; shift++) {
 
@@ -675,60 +675,60 @@ float*** load_codes(char* phase_format, char* img_format, char numbered_imgs,
                     sprintf(filename, img_format, k * nb_shifts + shift);
                 else
                     sprintf(filename, img_format, w, h, k, shift);
-                
+
                 intensities[shift] = load_pgm(filename, &w, &h);
 
             }
-            
+
             #pragma omp parallel for
             for(int i=0; i < h; i++) {
                 for(int j=0; j < w; j++) {
                     float* intensities_ij = malloc(sizeof(float) * nb_shifts);
-                
+
                     for(int shift=0; shift < nb_shifts; shift++) {
                         intensities_ij[shift] = intensities[shift][i][j];
                     }
-                
+
                     codes[k][i][j] = solve_phase(intensities_ij, nb_shifts);
                     image[i][j] = (codes[k][i][j]  + PI) / (2 * PI) * 65535.0;
 
                     free(intensities_ij);
                 }
             }
-        
+
             sprintf(filename, phase_format, w, h, k);
             save_pgm(filename, image, w, h, 16);
-        
+
             free_f32matrix(image);
             free_f32cube(intensities, nb_shifts);
         }
     }
-    
+
     return codes;
 }
 
 void save_phase(float*** intensities, char* filename, int nb_shifts, int w, int h) {
     float** image = malloc_f32matrix(w, h);
-    
+
     // Precompute phases
     #pragma omp parallel
     {
         float* intensities_ij = malloc(sizeof(float) * nb_shifts);
-        
+
         for(int i=0; i < h; i++) {
             for(int j=0; j < w; j++) {
-                
+
                 for(int shift=0; shift < nb_shifts; shift++) {
                     intensities_ij[shift] = intensities[shift][i][j];
                 }
-                
+
                 image[i][j] = (solve_phase(intensities_ij, nb_shifts) + PI) / (2 * PI) * 65535;
             }
         }
-        
+
         free(intensities_ij);
     }
-    
+
     save_pgm(filename, image, w, h, 16);
 
     free_f32matrix(image);
@@ -737,7 +737,7 @@ void save_phase(float*** intensities, char* filename, int nb_shifts, int w, int 
 void save_color_map(char* filename, float*** matches, int from_w, int from_h,
                     int to_w, int to_h, float max_distance) {
     float*** channels = malloc_f32cube(3, from_w, from_h);
-    
+
     // Color map
     for(int i=0; i<from_h; i++)
         for(int j=0; j<from_w; j++) {
@@ -751,9 +751,8 @@ void save_color_map(char* filename, float*** matches, int from_w, int from_h,
                 channels[DIST][i][j] = fmin(matches[DIST][i][j] * 65535.0/max_distance, 65535.0);
             }
         }
-    
+
     save_ppm(filename, channels, from_w, from_h, 16);
-    
+
     free_f32cube(channels, 3);
 }
-
