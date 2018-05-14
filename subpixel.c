@@ -136,8 +136,6 @@ int main(char argc, char** argv) {
     float*** cam_codes = load_codes(cam_phase_format, cam_format, 1, nb_patterns, nb_shifts, from_w, from_h);
     float*** ref_codes = load_codes(ref_phase_format, ref_format, 0, nb_patterns, nb_shifts, to_w, to_h);
 
-    float** colormap = malloc_f32matrix(from_w, from_h);
-
     // Up-right, Down-right, Down-left, Up-left
     int pos_x[] = {+1, +1, -1, -1};
     int pos_y[] = {-1, +1, +1, -1};
@@ -165,7 +163,6 @@ int main(char argc, char** argv) {
 
             // Undefined matches stay undefined
             if(x < 0) {
-                colormap[i][j] = -1;
                 subpixel[X][i][j] = subpixel[Y][i][j] = subpixel[DIST][i][j] = -1;
                 continue;
             }
@@ -203,7 +200,7 @@ int main(char argc, char** argv) {
 
                 for(k=0; k<nb_patterns; k++) {
 
-                    // TODO : Check this
+                    // TODO : validate this
                     float m = match[k],
                         a = unwrap(m, ref_codes[k][y][x]),
                         b = unwrap(m, ref_codes[k][y][x + pos_x[q]]),
@@ -216,11 +213,12 @@ int main(char argc, char** argv) {
                             /* Interpolation linéaire à l'intérieur du pixel de
                                référence et calcul de la distance au pixel
                                de caméra */
-                            float vall = subpixel_value(u/(float)(PRECISION - 1), v/(float)(PRECISION - 1), a, b, c, d);
+                            // TODO : validate : u/(float)PRECISION, v/(float)PRECISION
+                            float vall = subpixel_value(u/(float)PRECISION, v/(float)PRECISION, a, b, c, d);
 
                             // TODO : fabs (L1) semble donner des plus
                             // beaux résultats que fsquare (L2), à vérifier
-                            costs[v][u] += fabs(m - vall);
+                            costs[v][u] += fsquare(m - vall);
                         }
                     }
                 }
@@ -230,8 +228,8 @@ int main(char argc, char** argv) {
                 /* decalage_x[q] = pos_x[q] * decalage_x[q] / (2.0 * PRECISION) + 0.5; */
                 /* decalage_y[q] = pos_y[q] * decalage_y[q] / (2.0 * PRECISION) + 0.5; */
 
-                decalage_x[q] = pos_x[q] * decalage_x[q]/((float)PRECISION - 1) + 0.5;
-                decalage_y[q] = pos_y[q] * decalage_y[q]/((float)PRECISION - 1) + 0.5;
+                decalage_x[q] = pos_x[q] * decalage_x[q]/((float)PRECISION) + 0.5;
+                decalage_y[q] = pos_y[q] * decalage_y[q]/((float)PRECISION) + 0.5;
 
                 if(debug_surface && rand()/(float)RAND_MAX < 0.0001) {
                     char debug_filename[50];
@@ -262,108 +260,40 @@ int main(char argc, char** argv) {
                 } else if(quadrant_best[k] == 0) { // TODO : fabs(quadrant_best[k] - min) < 1e-6) { // good epsilon ?
                     equals++;
                 }
-
-                /* if(quadrant_best[k] != 0) { */
-                /*     printf("%f\n", quadrant_best[k]); */
-                /* } */
             }
 
-            if(index != -1) {
-                colormap[i][j] = index;
-
-                if(equals) {
-                    colormap[i][j] = 4;
-                }
-
-                subpixel[X][i][j] = decalage_x[index];
-                subpixel[Y][i][j] = decalage_y[index];
-            }
+            subpixel[X][i][j] = matches[X][i][j] + decalage_x[index];
+            subpixel[Y][i][j] = matches[Y][i][j] + decalage_y[index];
 
             // Keep distance information
             subpixel[DIST][i][j] = matches[DIST][i][j];
-
-            for(k=0; k<2; k++)
-                subpixel[k][i][j] += matches[k][i][j];
         }
     }
 
     if(verbose)
         fprintf(stderr, "\n");
 
-    FILE* vals;
-
-    // Statistics
-    for(k=0; k<2; k++) {
-        float min = INFINITY; // TODO : ?
-        float avg = 0, abs_avg = 0;
-        float max = -INFINITY;
-
-        if(k == 0)
-            vals = fopen("subpixel-x-vals", "w");
-        else
-            vals = fopen("subpixel-y-vals", "w");
-
-        for(i=1; i<from_h-1; i++)
-            for(j=1; j<from_w-1; j++) {
-                avg += subpixel[k][i][j] - matches[k][i][j];
-                abs_avg += fabs(subpixel[k][i][j] - matches[k][i][j]);
-                min = fmin(min, subpixel[k][i][j] - matches[k][i][j]);
-                max = fmax(max, subpixel[k][i][j] - matches[k][i][j]);
-                fprintf(vals, "%d %f\n", (int)colormap[i][j], subpixel[k][i][j] - matches[k][i][j]);
-            }
-
-        avg /= (from_h - 2) * (from_w - 2);
-        abs_avg /= (from_h - 2) * (from_w - 2);
-        printf("avg=%f abs_avg=%f min=%f max=%f\n", avg, abs_avg, min, max);
-        fclose(vals);
-    }
-
     if(debug_surface) {
-        // TODO : Base la colormap sur la position du sous-pixel dans le
-        // pixel plutôt que sur le diff avec l'image originale : la
-        // méthode peut possiblement corriger un mauvais match, donc
-        // certains pixels se retrouvent avec un déplacement > 1 pixel, ce
-        // qui rend la colormap incompréhensible
         float*** out_colormap = malloc_f32cube(3, from_w, from_h);
+
         for(i=0; i<from_h; i++) {
             for(j=0; j<from_w; j++) {
+                int pixel_x = (int) subpixel[X][i][j];
+                int pixel_y = (int) subpixel[Y][i][j];
 
-                /* Code :
-                   -1 = No match = White
-                   0 = Up-right = R
-                   1 = Down-right = G
-                   2 = Down-left = B
-                   3 = Up-left = Cyan
-                   4 = Multiple choices (center) = Black
-                */
-                switch((int) colormap[i][j]) {
-                case -1:
-                    out_colormap[0][i][j] = out_colormap[1][i][j] = out_colormap[2][i][j] = 255;
-                    break;
+                if(pixel_x != -1) {
+                    float dx = subpixel[X][i][j] - pixel_x;
+                    float dy = subpixel[Y][i][j] - pixel_y;
 
-                case 0:
-                    out_colormap[1][i][j] = out_colormap[2][i][j] = 0;
-                    out_colormap[0][i][j] = 255;
-                    break;
+                    out_colormap[0][i][j] = 255 * dx;
+                    out_colormap[1][i][j] = 255 * dy;
 
-                case 1:
-                    out_colormap[0][i][j] = out_colormap[2][i][j] = 0;
-                    out_colormap[1][i][j] = 255;
-                    break;
+                } else {
 
-                case 2:
-                    out_colormap[0][i][j] = out_colormap[1][i][j] = 0;
-                    out_colormap[2][i][j] = 255;
-                    break;
-
-                case 3:
-                    out_colormap[1][i][j] = out_colormap[2][i][j] = 255;
                     out_colormap[0][i][j] = 0;
-                    break;
+                    out_colormap[1][i][j] = 0;
+                    out_colormap[2][i][j] = 255;
 
-                case 4:
-                    out_colormap[0][i][j] = out_colormap[1][i][j] = out_colormap[2][i][j] = 0;
-                    break;
                 }
             }
         }
