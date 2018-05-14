@@ -22,8 +22,6 @@ int main(char argc, char** argv) {
     char* gname = "split-g.pgm";
     char* bname = "split-b.pgm";
 
-    int depth = 16;
-
     // Args parsing
     ARGBEGIN
     ARG_CASE('r')
@@ -35,17 +33,22 @@ int main(char argc, char** argv) {
     ARG_CASE('b')
         bname = ARGS;
 
-    ARG_CASE('d')
-        depth = ARGI;
-
     WRONG_ARG
         usage:
-        printf("usage: %s [-r split-r.pgm] [-g split-g.pgm] [-b split-b.pgm] [-d depth] filename\n", argv0);
+        printf("usage: %s [-r split-r.pgm] [-g split-g.pgm] [-b split-b.pgm] filename\n", argv0);
         exit(1);
 
     ARGEND
 
     if(argc < 1) goto usage;
+
+    int size;
+
+    FILE *f = fopen(argv[0], "r");
+    read_image_header(f, &w, &h, &size);
+    fclose(f);
+
+    int depth = size == 65535 ? 16 : 8;
 
     float*** in = load_ppm(argv[0], &w, &h);
 

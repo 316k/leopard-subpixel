@@ -18,13 +18,14 @@ int main(char argc, char** argv) {
     float x = 0.0;
     float y = 0.0;
 
-    int depth = 16;
+    int depth = -1, force_depth = 0;
 
     // Args parsing
     ARGBEGIN
 
     ARG_CASE('d')
         depth = ARGI;
+        force_depth = 1;
 
     WRONG_ARG
         usage:
@@ -34,6 +35,28 @@ int main(char argc, char** argv) {
     ARGEND
 
     if(argc < 4) goto usage;
+
+    if(!force_depth) {
+
+        int size_r, size_g, size_b;
+
+        FILE *file = fopen(argv[0], "r");
+        read_image_header(file, &w, &h, &size_r);
+        fclose(file);
+
+        depth = size_r == 65535 ? 16 : 8;
+
+        // R/G/B channels should have the same depth
+        fopen(argv[1], "r");
+        read_image_header(file, &w, &h, &size_g);
+        fclose(file);
+
+        if(size_g != size_r || size_b != size_r) {
+            printf("error: all three pgm images should have the same depth\n"
+                   "\t(use -d ... to force a depth)\n");
+            exit(1);
+        }
+    }
 
     float** r = load_pgm(argv[0], &w, &h);
     float** g = load_pgm(argv[1], &w, &h);
