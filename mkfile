@@ -52,4 +52,4 @@ presentation.pdf: presentation.md
 	pandoc -t beamer -V theme:Berkeley -V colortheme:dolphin presentation.md -o presentation.pdf
 
 &: &.c helpers.c
-	gcc -g $stem.c -fopenmp -lm -o $stem
+	gcc -Wall -g $stem.c -fopenmp -lm -o $stem

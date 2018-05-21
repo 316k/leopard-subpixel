@@ -101,7 +101,7 @@ float*** load_ppm(char* name, int *w, int *h) {
 
     int i, j, k, v, size;
     float*** mat = malloc(sizeof(float**) * 3); // R,G,B channels
-    char foo[100];
+
     FILE *f = fopen(name, "r");
 
     if(f == NULL) {

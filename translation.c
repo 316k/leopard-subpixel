@@ -29,9 +29,9 @@ int sign(float x) {
     return x >= 0 ? 1 : -1;
 }
 
-int main(char argc, char** argv) {
+int main(int argc, char** argv) {
 
-    int nthreads = 4, i, j, k, foo, shift, w, h;
+    int nthreads = 4, i, j, w, h;
 
     float x = 0.0;
     float y = 0.0;

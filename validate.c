@@ -12,11 +12,9 @@
 #include "args.h"
 #include "helpers.c"
 
-int main(char argc, char** argv) {
+int main(int argc, char** argv) {
 
     int nthreads = 4, i, j, k, w, h;
-
-    float x = 0.0, y = 0.0;
 
     // Args parsing
     ARGBEGIN

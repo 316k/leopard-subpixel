@@ -17,11 +17,11 @@ float squared(float val) {
     return val * val;
 }
 
-int main(char argc, char** argv) {
+int main(int argc, char** argv) {
 
     int nthreads = 4, i, j, k, w, h, center = 0;
 
-    float decalage = 0.0, threshold = 1.3;
+    float threshold = 1.3;
 
     // Args parsing
     ARGBEGIN

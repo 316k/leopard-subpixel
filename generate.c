@@ -8,7 +8,7 @@
 #include "args.h"
 #include "helpers.c"
 
-int main(char argc, char** argv) {
+int main(int argc, char** argv) {
     int i, j;
     int nthreads = 4, w = 1920, h = 1080,
         nb_waves = 32, nb_shifts = 3,

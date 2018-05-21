@@ -18,9 +18,9 @@ float squared(float val) {
     return val * val;
 }
 
-int main(char argc, char** argv) {
+int main(int argc, char** argv) {
 
-    int nthreads = 4, i, j, k, w, h, phase, color;
+    int nthreads = 4, i, j, k, w, h;
 
     // Args parsing
     ARGBEGIN
@@ -28,7 +28,8 @@ int main(char argc, char** argv) {
         nthreads = ARGI;
     WRONG_ARG
         usage:
-        printf("usage: %s [-t nb_threads=%d] a.pgm [b.pgm ...]\n", argv0);
+        printf("usage: %s [-t nb_threads=%d] a.pgm [b.pgm ...]\n",
+               argv0, nthreads);
         exit(1);
 
     ARGEND

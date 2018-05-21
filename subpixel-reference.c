@@ -18,9 +18,9 @@ float get(float** matrix, int i, int j, int w, int h) {
 
 }
 
-int main(char argc, char** argv) {
+int main(int argc, char** argv) {
 
-    int nthreads = 4, i, j, k, shift, w = 1920, h = 1080;
+    int nthreads = 4, i, j, k, w = 1920, h = 1080;
 
     float x = 0.0, y = 0.0;
 
@@ -49,7 +49,7 @@ int main(char argc, char** argv) {
 
     WRONG_ARG
         usage:
-        printf("usage: %s [-t nb_threads=%d] [-x del-x=%f] [-y del-y=%f]\n",
+        printf("usage: %s [-t nb_threads=%d] [-x del-x=%f] [-y del-y=%f]\n"
                "\t[-w %d] [-h %d]\n",
                argv0, nthreads, x, y, w, h);
     exit(1);
@@ -68,9 +68,9 @@ int main(char argc, char** argv) {
     FILE* vals;
 
     for(k=0; k<2; k++) {
-        float min = 100000;
+        float min = INFINITY;
         float dec = 0;
-        float max = -100000;
+        float max = -INFINITY;
 
         if(k == 0)
             vals = fopen("subpixel-x-ref", "w");

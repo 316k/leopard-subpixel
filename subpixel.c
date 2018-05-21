@@ -70,7 +70,7 @@ float f32matrix_min(float** costs, float *u, float *v, int w, int h) {
     return min;
 }
 
-int main(char argc, char** argv) {
+int main(int argc, char** argv) {
 
     int nthreads = 4, i, j, k, from_w, from_h, to_w, to_h, foo,
         nb_shifts, nb_patterns, debug_surface = 0, verbose = 0;

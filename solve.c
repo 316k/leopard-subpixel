@@ -59,7 +59,7 @@ void hash_to_codes(float*** to_codes, int* hash_table[2], int* phases_used,
  * Attempts to improve an existing match by comparing the neighborhood of
  * the matched *to* pixel with the matched *from* pixel
  */
-char forward_matching(float*** matches, float*** from_codes, float*** to_codes,
+void forward_matching(float*** matches, float*** from_codes, float*** to_codes,
                       float* from_code, int from_x, int from_y, int to_x, int to_y) {
 
     float* to_code = malloc(sizeof(float) * nb_patterns);
@@ -178,7 +178,7 @@ void hash_from_codes(float*** matches, float*** from_codes, float*** to_codes,
 void lsh(float*** matches, float*** from_codes, float*** to_codes,
          int nb_patterns, char use_heuristics) {
 
-    int i, j, k, l;
+    int i, j;
     //int nb_values = 3; // (inexact->integer (ceiling (/ nb-patterns 2))))
     //int nb_boxes = 10; // (inexact->integer (ceiling (logb (* w h) nbr-values))))
     int nb_collisions = 0, nb_new_matches = 0, nb_better_matches = 0;
@@ -193,11 +193,6 @@ void lsh(float*** matches, float*** from_codes, float*** to_codes,
     }
 
     int* phases_used = random_phases(nb_values, nb_patterns);
-
-    // Random iteration
-    int to_i_start, to_i_end, to_j_start, to_j_end,
-        from_i_start, from_i_end, from_j_start,
-        from_j_end, i_increment, j_increment;
 
     int iteration = rand() % 4;
 
@@ -282,9 +277,9 @@ void lsh(float*** matches, float*** from_codes, float*** to_codes,
     printf("nb_better_matches: %d\n", nb_better_matches);
 }
 
-int main(char argc, char** argv) {
+int main(int argc, char** argv) {
 
-    int i, j, k, l, foo, shift;
+    int i, j, k, l;
     FILE* info = fopen("sines.txt", "r");
 
     // Check file size to avoid problems if sines.txt is empty
