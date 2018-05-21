@@ -33,21 +33,26 @@ static inline float fsquare(float val) {
     return val * val;
 }
 
+/**
+ * Add a multiple of 2pi to val to make it closer to ref.
+ * Note : both ref and val should be in [-pi, pi]
+ * Ex.:
+ *   ref = 3.121938, val = -3.112159
+ *   => fixed_val = 3.171026
+ */
 float unwrap(float ref, float val) {
-    float diff = INFINITY;
-    float new_diff;
-    // FIXME ? : modulo 2PI seulement
-    for(int i = -2; i <= 2; i++) {
-        new_diff = fabs(ref - (val + i * PI));
 
-        if(new_diff > diff) {
-            return val + (i - 1) * PI;
-        }
+    for(int i = -1; i <= 1; i++) {
+        float fixed_val = val + i * 2 * PI;
 
-        diff = new_diff;
+        float diff = fabs(ref - fixed_val);
+
+        if(diff < PI)
+            return fixed_val;
     }
 
-    return val + 2 * PI;
+    // Shouldn't happen...
+    exit(-1);
 }
 
 float f32matrix_min(float** costs, float *u, float *v, int w, int h) {
@@ -145,7 +150,7 @@ int main(char argc, char** argv) {
     if(verbose && progress_bar_increment) {
         // Progress-bar
         for(i=0; i<from_h; i += progress_bar_increment) {
-            fprintf(stderr, ".", i);
+            fprintf(stderr, ".");
         }
         fprintf(stderr, "\n");
     }
@@ -173,7 +178,7 @@ int main(char argc, char** argv) {
                 match[k] = cam_codes[k][i][j];
             }
 
-            float** costs = malloc_f32matrix(PRECISION, PRECISION);
+            float** costs = malloc_f32matrix(PRECISION + 1, PRECISION + 1);
 
             float quadrant_best[4];
             float decalage_x[4], decalage_y[4];
@@ -194,50 +199,49 @@ int main(char argc, char** argv) {
                    (pos_y[q] == +1 && y == to_h - 1))
                     continue;
 
-                for(int u=0; u<PRECISION; u++)
-                    for(int v=0; v<PRECISION; v++)
-                        costs[u][v] = 0.0;
+                for(int u=0; u<=PRECISION; u++)
+                    for(int v=0; v<=PRECISION; v++)
+                        costs[v][u] = 0.0;
 
                 for(k=0; k<nb_patterns; k++) {
 
-                    // TODO : validate this
                     float m = match[k],
                         a = unwrap(m, ref_codes[k][y][x]),
                         b = unwrap(m, ref_codes[k][y][x + pos_x[q]]),
                         c = unwrap(m, ref_codes[k][y + pos_y[q]][x]),
                         d = unwrap(m, ref_codes[k][y + pos_y[q]][x + pos_x[q]]);
 
-                    for(int u=0; u<PRECISION; u++) {
-                        for(int v=0; v<PRECISION; v++) {
+                    for(int u=0; u<=PRECISION; u++) {
+                        for(int v=0; v<=PRECISION; v++) {
 
                             /* Interpolation linéaire à l'intérieur du pixel de
                                référence et calcul de la distance au pixel
                                de caméra */
-                            // TODO : validate : u/(float)PRECISION, v/(float)PRECISION
                             float vall = subpixel_value(u/(float)PRECISION, v/(float)PRECISION, a, b, c, d);
 
-                            // TODO : fabs (L1) semble donner des plus
-                            // beaux résultats que fsquare (L2), à vérifier
-                            costs[v][u] += fsquare(m - vall);
+                            // TODO : Compare fabs (L1) vs fsquare (L2)
+                            costs[v][u] += fabs(m - vall);
                         }
                     }
                 }
 
-                quadrant_best[q] = f32matrix_min(costs, &decalage_x[q], &decalage_y[q], PRECISION, PRECISION);
+                quadrant_best[q] = f32matrix_min(costs, &decalage_x[q], &decalage_y[q], PRECISION + 1, PRECISION + 1);
 
                 /* decalage_x[q] = pos_x[q] * decalage_x[q] / (2.0 * PRECISION) + 0.5; */
                 /* decalage_y[q] = pos_y[q] * decalage_y[q] / (2.0 * PRECISION) + 0.5; */
 
+                printf("nooo %d : %f %f\n", q, decalage_x[q], decalage_y[q]);
+
                 decalage_x[q] = pos_x[q] * decalage_x[q]/((float)PRECISION) + 0.5;
                 decalage_y[q] = pos_y[q] * decalage_y[q]/((float)PRECISION) + 0.5;
 
-                if(debug_surface && rand()/(float)RAND_MAX < 0.0001) {
+                if(debug_surface) {
                     char debug_filename[50];
                     sprintf(debug_filename, "debug/%d-%d-%d", x, y, q);
                     FILE *debug = fopen(debug_filename, "w");
 
-                    for(int u=0; u<PRECISION; u++) {
-                        for(int v=0; v<PRECISION; v++) {
+                    for(int u=0; u<PRECISION + 1; u++) {
+                        for(int v=0; v<PRECISION + 1; v++) {
                             fprintf(debug, "%f ", costs[u][v]);
                         }
                         fputc('\n', debug);
@@ -251,14 +255,11 @@ int main(char argc, char** argv) {
 
             // Trouve le meilleur match de sous-pixel
             float min = quadrant_best[0];
-            int index = 0, equals = 0;
+            int index = 0;
             for(k=1; k<4; k++) {
                 if(quadrant_best[k] < min) {
                     min = quadrant_best[k];
                     index = k;
-                    equals = 0;
-                } else if(quadrant_best[k] == 0) { // TODO : fabs(quadrant_best[k] - min) < 1e-6) { // good epsilon ?
-                    equals++;
                 }
             }
 
