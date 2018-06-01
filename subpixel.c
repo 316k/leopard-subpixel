@@ -230,7 +230,7 @@ int main(int argc, char** argv) {
                 /* decalage_x[q] = pos_x[q] * decalage_x[q] / (2.0 * PRECISION) + 0.5; */
                 /* decalage_y[q] = pos_y[q] * decalage_y[q] / (2.0 * PRECISION) + 0.5; */
 
-                printf("nooo %d : %f %f\n", q, decalage_x[q], decalage_y[q]);
+                // printf("nooo %d : %f %f\n", q, decalage_x[q], decalage_y[q]);
 
                 decalage_x[q] = pos_x[q] * decalage_x[q]/((float)PRECISION) + 0.5;
                 decalage_y[q] = pos_y[q] * decalage_y[q]/((float)PRECISION) + 0.5;
