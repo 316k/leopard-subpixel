@@ -272,6 +272,7 @@ float distance_modulo_pi(float* a, float* b, int len) {
     return total;
 }
 
+// Mathematica : Table[ ToString[x] -> Round[Erfc[x]/2*256], {x, -2, 2, 0.01}]
 float grey_scale_erfc(float value) {
     int n = roundf(value * 100);
 
