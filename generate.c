@@ -45,7 +45,7 @@ int main(int argc, char** argv) {
     // Init image matrix
     float** image = malloc_f32matrix(w, h);
 
-    float base_freq = 0.1;
+    float base_freq = 0.02;
     float* phases = malloc(sizeof(float) * nb_waves);
     float* angles = malloc(sizeof(float) * nb_waves);
     float* freqs  = malloc(sizeof(float) * nb_waves);
@@ -61,7 +61,7 @@ int main(int argc, char** argv) {
         for(i=0; i<nb_waves; i++) {
             phases[i] = rand()/(float)RAND_MAX * 2 * PI;
             angles[i] = rand()/(float)RAND_MAX * PI;
-            freqs[i] = base_freq + rand()/(float)RAND_MAX * 0.01 - 0.005;
+            freqs[i] = base_freq * pow(2, 2 * rand()/(float)RAND_MAX - 1);
             fprintf(info, "%f %f %f ", phases[i], angles[i], freqs[i]);
         }
 
@@ -81,12 +81,12 @@ int main(int argc, char** argv) {
 
                         float fx, fy, phase;
 
-                        fx = freqs[wave] * sin(angles[wave]);
-                        fy = freqs[wave] * cos(angles[wave]);
+                        fx = 2 * PI * freqs[wave] * sin(angles[wave]);
+                        fy = 2 * PI * freqs[wave] * cos(angles[wave]);
 
                         phase = phases[wave] + shift * 2.0 * PI / (float) nb_shifts;
 
-                        image[i][j] += 2*cosf(fy * i + fx * j + phase);
+                        image[i][j] += cosf(fy * i + fx * j + phase);
                     }
                 }
             }
@@ -98,12 +98,12 @@ int main(int argc, char** argv) {
                 }
             }
 
-            char filename[20];
+            char filename[50];
             sprintf(filename, "leo_%d_%d_%03d_%02d.pgm", w, h, n, shift);
             save_pgm(filename, image, w, h, 8);
         }
 
-        char filename[30];
+        char filename[50];
         sprintf(filename, "phase_ref_%d_%d_%03d.pgm", w, h, n);
         save_phase(intensities, filename, nb_shifts, w, h);
 
