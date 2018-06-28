@@ -290,7 +290,7 @@ int main(int argc, char** argv) {
     }
     fseek(info, 0, SEEK_SET);
 
-    int nthreads = 4, nb_iterations = 30, nb_waves, nb_shifts, disable_heuristics = 0;
+    int nthreads = 4, nb_iterations = 30, nb_waves, nb_shifts, disable_heuristics = 0, proj_lut = 0;
 
     float hash_table_ratio = 2.0;
 
@@ -304,6 +304,9 @@ int main(int argc, char** argv) {
     ARGBEGIN
         ARG_CASE('t')
         nthreads = ARGI;
+
+    ARG_CASE('p')
+        proj_lut = 1;
 
     ARG_CASE('c')
         cam_format = ARGS;
@@ -320,14 +323,15 @@ int main(int argc, char** argv) {
     ARG_CASE('b')
         nb_boxes = ARGI;
 
-    ARG_CASE('p')
+    ARG_CASE('r')
         hash_table_ratio = ARGF;
 
     WRONG_ARG
-        printf("usage: %s [-t nb_threads=%d] [-c cam_format=\"%s\"]\n"
+        printf("usage: %s [-t nb_threads=%d] [-p gen_proj_lut]\n"
+               "\t[-c cam_format=\"%s\"]\n"
                "\t[-i nb_iterations=%d] [-d (disable heuristics)]\n"
                "\t[-b nb_boxes=%d] [-v nb_values=%d]\n"
-               "\t[-p hash_table_ratio=%f]\n",
+               "\t[-r hash_table_ratio=%f]\n",
                argv0, nthreads, cam_format, nb_iterations,
                nb_boxes, nb_values, hash_table_ratio);
         exit(1);
@@ -355,6 +359,25 @@ int main(int argc, char** argv) {
     sprintf(filename, cam_format, 0);
     free_f32matrix(load_pgm(filename, &from_w, &from_h));
 
+
+    // Generating projector LUT => read captured images as projected
+    // images
+    if(proj_lut) {
+        ref_format = "%03d.pgm";
+        cam_format = "leo_%d_%d_%03d_%02d.pgm";
+        ref_phase_format = "phase_cam_%d_%d_%03d.pgm";
+        cam_phase_format = "phase_ref_%d_%d_%03d.pgm";
+
+        int tmp;
+        tmp = from_w;
+        from_w = to_w;
+        to_w = tmp;
+
+        tmp = from_h;
+        from_h = to_h;
+        to_h = tmp;
+    }
+
     float*** matches = malloc_f32cube(3, from_w, from_h); // matches[ x, y, distance ][h=i][w=j]
 
     #pragma omp parallel for private(i, j)
@@ -369,8 +392,8 @@ int main(int argc, char** argv) {
     float* from_code = malloc(sizeof(float) * nb_patterns);
     float* to_code = malloc(sizeof(float) * nb_patterns);
 
-    cam_codes = load_codes(cam_phase_format, cam_format, 1, nb_patterns, nb_shifts, from_w, from_h);
-    ref_codes = load_codes(ref_phase_format, ref_format, 0, nb_patterns, nb_shifts, to_w, to_h);
+    cam_codes = load_codes(cam_phase_format, cam_format, !proj_lut, nb_patterns, nb_shifts, from_w, from_h);
+    ref_codes = load_codes(ref_phase_format, ref_format, proj_lut, nb_patterns, nb_shifts, to_w, to_h);
 
     for(l=0; l<nb_iterations; l++) {
         printf("----- Iteration %02d -----\n", l);
@@ -406,7 +429,11 @@ int main(int argc, char** argv) {
         }
 
         // Save the iteration
-        sprintf(filename, "matches-%02d.ppm", l);
+        if(proj_lut)
+            sprintf(filename, "lutProj%02d.ppm", l);
+        else
+            sprintf(filename, "lutCam%02d.ppm", l);
+
         save_color_map(filename, matches,
                        from_w, from_h, to_w, to_h, nb_patterns * PI/2.0);
     }

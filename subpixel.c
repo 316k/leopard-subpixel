@@ -73,13 +73,16 @@ float f32matrix_min(float** costs, float *u, float *v, int w, int h) {
 int main(int argc, char** argv) {
 
     int nthreads = 4, i, j, k, from_w, from_h, to_w, to_h, foo,
-        nb_shifts, nb_patterns, debug_surface = 0, verbose = 0;
+        nb_shifts, nb_patterns, debug_surface = 0, verbose = 0, proj_lut = 0;
 
     char* ref_format = "leo_%d_%d_%03d_%02d.pgm";
     char* cam_format = "%03d.pgm";
 
     // Args parsing
     ARGBEGIN
+
+    ARG_CASE('p')
+        proj_lut = 1;
 
     LSARG_CASE('d', "debug-surface")
         debug_surface = 1;
@@ -92,7 +95,7 @@ int main(int argc, char** argv) {
 
     WRONG_ARG
         usage:
-        printf("usage: %s [-t nb_threads=%d] [-d --debug-surface] [-v --verbose] filename\n",
+        printf("usage: %s [-t nb_threads=%d] [-p proj_lut] [-d --debug-surface] [-v --verbose] filename\n",
                argv0, nthreads);
     exit(1);
 
@@ -123,6 +126,24 @@ int main(int argc, char** argv) {
 
     float*** matches = load_ppm(argv[argc - 1], &from_w, &from_h);
 
+    // Generating projector LUT => read captured images as projected
+    // images
+    if(proj_lut) {
+        ref_format = "%03d.pgm";
+        cam_format = "leo_%d_%d_%03d_%02d.pgm";
+        ref_phase_format = "phase_cam_%d_%d_%03d.pgm";
+        cam_phase_format = "phase_ref_%d_%d_%03d.pgm";
+
+        int tmp;
+        tmp = from_w;
+        from_w = to_w;
+        to_w = tmp;
+
+        tmp = from_h;
+        from_h = to_h;
+        to_h = tmp;
+    }
+
     #pragma omp parallel for private(i, j)
     for(i=0; i<from_h; i++)
         for(j=0; j<from_w; j++) {
@@ -138,8 +159,8 @@ int main(int argc, char** argv) {
 
     float*** subpixel = malloc_f32cube(3, from_w, from_h);
 
-    float*** cam_codes = load_codes(cam_phase_format, cam_format, 1, nb_patterns, nb_shifts, from_w, from_h);
-    float*** ref_codes = load_codes(ref_phase_format, ref_format, 0, nb_patterns, nb_shifts, to_w, to_h);
+    float*** cam_codes = load_codes(cam_phase_format, cam_format, !proj_lut, nb_patterns, nb_shifts, from_w, from_h);
+    float*** ref_codes = load_codes(ref_phase_format, ref_format, proj_lut, nb_patterns, nb_shifts, to_w, to_h);
 
     // Up-right, Down-right, Down-left, Up-left
     int pos_x[] = {+1, +1, -1, -1};
@@ -154,7 +175,6 @@ int main(int argc, char** argv) {
         }
         fprintf(stderr, "\n");
     }
-
     #pragma omp parallel for private(i, j, k)
     for(i=0; i<from_h; i++) {
 
@@ -302,7 +322,9 @@ int main(int argc, char** argv) {
         save_ppm("debug-subpixel.ppm", out_colormap, from_w, from_h, 8);
     }
 
-    save_color_map("subpixel.ppm", subpixel, from_w, from_h, to_w, to_h, nb_patterns * PI/2.0);
+    save_color_map(
+        proj_lut ? "lutSubProj.ppm" : "lutSubCam.ppm",
+        subpixel, from_w, from_h, to_w, to_h, nb_patterns * PI/2.0);
 
     return 0;
 }
