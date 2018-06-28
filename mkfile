@@ -7,10 +7,10 @@ H=1080
 ITERATIONS=66
 
 .all:V: generate solve subpixel enhance translation subpixel-reference \
-        error validate dump_pixels
+        error validate dump_pixels sines
 
 reset:V: clean-cam
-	rm -f {leo,phase_ref}*.pgm sines.txt tmp.log *.png
+	rm -f {leo,phase_ref}*.pgm sines.txt tmp.log *.png sine_*.pgm
 
 clean-cam:V:
     rm -f {phase_cam,matches,0,1,2,3,4,5,6,7,8,9,ref}*.{pgm,ppm} subpixel-{x,y}-*
