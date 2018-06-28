@@ -85,7 +85,7 @@ def lut_to_corrected_points(lut1, internes1, disto1, lut2, internes2, disto2, th
 
 
 if len(argv) < 5:
-    print("Usage %s lut1.ppm lut2.ppm cam1params.dat cam2params.dat [lut3d.ppm] > pts.dat" % argv[0])
+    print("Usage %s lut1.ppm lut2.ppm cam1params.dat cam2params.dat [lut3d.ppm] > pts.txt" % argv[0])
     print()
     print("  Outputs 3D points from two LUT + calibration data on stdout")
     print("  If a last ppm filename is given, writes a LUT with RGB -> (x, y, z)")
@@ -105,7 +105,7 @@ lut3d = False
 threshold = 0.40
 
 # Dump une depth map en ppm si demandé
-if len(argv) > 4:
+if len(argv) > 5:
     lut3d = np.zeros((lut1.shape[0], lut1.shape[1], 3))
 
     grid = np.zeros((lut1.shape[0], lut1.shape[1], 2), dtype=int)
