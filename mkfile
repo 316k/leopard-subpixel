@@ -17,7 +17,7 @@ clean-cam:V:
 
 clean-all:V: reset clean-cam
     rm -f generate solve subpixel enhance translation subpixel-reference \
-       error validate dump_pixels
+       error validate dump_pixels sines
     rm -f cube-ref.ppm
 
 sines.txt: generate
