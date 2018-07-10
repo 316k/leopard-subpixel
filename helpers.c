@@ -708,6 +708,57 @@ float*** load_codes(char* phase_format, char* img_format, char numbered_imgs,
     return codes;
 }
 
+float** load_mask(char* img_format, int nb_patterns, int w, int h) {
+
+    char* mask_fname = "maskCam.pgm";
+
+    if(access(mask_fname, F_OK) != -1) {
+        return load_pgm(mask_fname, &w, &h);
+    }
+
+    float** mask = malloc_f32matrix(w, h);
+    float** mask_max = malloc_f32matrix(w, h);
+    float** mask_min = malloc_f32matrix(w, h);
+
+    #pragma omp parallel for
+    for(int i=0; i < h; i++)
+        for(int j=0; j < w; j++)
+            mask_min[i][j] = 255;
+
+    // Compute mask
+    #pragma omp parallel for
+    for(int k=0; k<nb_patterns; k++) {
+
+        char filename[50];
+        sprintf(filename, img_format, k);
+
+        float** image = load_pgm(filename, &w, &h);
+
+        #pragma omp parallel for
+        for(int i=0; i < h; i++) {
+            for(int j=0; j < w; j++) {
+                mask_min[i][j] = fmin(mask_min[i][j], image[i][j]);
+                mask_max[i][j] = fmax(mask_max[i][j], image[i][j]);
+            }
+        }
+
+        free_f32matrix(image);
+    }
+
+    #pragma omp parallel for
+    for(int i=0; i < h; i++) {
+        for(int j=0; j < w; j++) {
+            mask[i][j] = (int) mask_max[i][j] - mask_min[i][j];
+        }
+    }
+
+    save_pgm(mask_fname, mask, w, h, 8);
+    save_pgm("camMin.pgm", mask_min, w, h, 8);
+    save_pgm("camMax.pgm", mask_max, w, h, 8);
+
+    return mask;
+}
+
 float*** quadratic_codes(float*** orig_codes, int nb_patterns, int w, int h) {
 
     int nb_extended = (nb_patterns + 1) * nb_patterns / 2;

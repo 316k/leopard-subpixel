@@ -14,6 +14,10 @@ int nb_boxes = 10, nb_values = 8, nb_patterns,
     hash_table_size;
 float hash_divider;
 
+// Threshold to consider a pixel as part of the scanned zone
+// -1 == disable mask, hash all pixels
+float mask_threshold = -1;
+float** mask;
 
 #define HASH_TO_CODES()   hash_to_codes(to_codes, hash_table, phases_used, i, j, &nb_collisions)
 
@@ -238,33 +242,33 @@ void lsh(float*** matches, float*** from_codes, float*** to_codes, char use_heur
     case 0:
         #pragma omp parallel for private(i, j)
         for(i=0; i < from_h; i++)
-            for(j=0; j < from_w; j++) {
-                HASH_FROM_CODES();
-            }
+            for(j=0; j < from_w; j++)
+                if(mask_threshold == -1 || mask[i][j] > mask_threshold)
+                    HASH_FROM_CODES();
         break;
 
     case 1:
         #pragma omp parallel for private(i, j)
         for(i=0; i < from_h; i++)
-            for(j=from_w - 1; j >= 0; j--) {
-                HASH_FROM_CODES();
-            }
+            for(j=from_w - 1; j >= 0; j--)
+                if(mask_threshold == -1 || mask[i][j] > mask_threshold)
+                    HASH_FROM_CODES();
         break;
 
     case 2:
         #pragma omp parallel for private(i, j)
         for(i=from_h - 1; i >= 0; i--)
-            for(j=0; j < from_w; j++) {
-                HASH_FROM_CODES();
-            }
+            for(j=0; j < from_w; j++)
+                if(mask_threshold == -1 || mask[i][j] > mask_threshold)
+                    HASH_FROM_CODES();
         break;
 
     case 3:
         #pragma omp parallel for private(i, j)
         for(i=from_h - 1; i >= 0; i--)
-            for(j=from_w - 1; j >= 0; j--) {
-                HASH_FROM_CODES();
-            }
+            for(j=from_w - 1; j >= 0; j--)
+                if(mask_threshold == -1 || mask[i][j] > mask_threshold)
+                    HASH_FROM_CODES();
         break;
     }
 
@@ -297,7 +301,10 @@ int main(int argc, char** argv) {
         nthreads = ARGI;
 
     ARG_CASE('p')
+
         proj_lut = 1;
+        // TODO : implement mask for lutProj
+        mask_threshold = -1;
 
     ARG_CASE('c')
         cam_format = ARGS;
@@ -321,14 +328,19 @@ int main(int argc, char** argv) {
 
         use_quadratic_codes = 1;
 
+    ARG_CASE('m')
+
+        mask_threshold = ARGF;
+
     WRONG_ARG
         printf("usage: %s [-t nb_threads=%d] [-p gen_proj_lut]\n"
                "\t[-c cam_format=\"%s\"]\n"
                "\t[-i nb_iterations=%d] [-d (disable heuristics)]\n"
                "\t[-b nb_boxes=%d] [-v nb_values=%d]\n"
-               "\t[-r hash_table_ratio=%f] [-q use_quadratic_codes]\n",
+               "\t[-r hash_table_ratio=%f] [-q use_quadratic_codes]\n"
+               "\t[-m mask_threshold=%f]\n",
                argv0, nthreads, cam_format, nb_iterations,
-               nb_boxes, nb_values, hash_table_ratio);
+               nb_boxes, nb_values, hash_table_ratio, mask_threshold);
         exit(1);
 
     ARGEND
@@ -400,6 +412,12 @@ int main(int argc, char** argv) {
     cam_codes = load_codes(cam_phase_format, cam_format, !proj_lut, nb_patterns, nb_shifts, from_w, from_h);
     ref_codes = load_codes(ref_phase_format, ref_format, proj_lut, nb_patterns, nb_shifts, to_w, to_h);
 
+    if(mask_threshold != -1) {
+
+        mask = load_mask(cam_format, nb_patterns, from_w, from_h);
+
+    }
+
     if(use_quadratic_codes) {
         float*** tmp_codes = cam_codes;
         cam_codes = quadratic_codes(cam_codes, nb_patterns, from_w, from_h);
@@ -440,8 +458,10 @@ int main(int argc, char** argv) {
                     int x = matches[X][i][j];
                     int y = matches[Y][i][j];
 
-                    forward_matching(matches, cam_codes, ref_codes,
-                                     from_code, j, i, x, y);
+                    if(mask_threshold == -1 || mask[i][j] > mask_threshold) {
+                        forward_matching(matches, cam_codes, ref_codes,
+                                         from_code, j, i, x, y);
+                    }
 
                     backward_matching(matches, cam_codes, ref_codes,
                                       to_code, j, i, x, y);
