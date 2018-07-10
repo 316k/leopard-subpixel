@@ -7,7 +7,7 @@ A leopard-pattern-based computer vision algorithm
 You'll need `gcc` to build these programs
 
 ```bash
-for i in generate solve subpixel enhance translation subpixel-reference \
+for i in generate solve subpixel translation subpixel-reference \
          error validate dump_pixels
 do
     gcc -g $i.c -fopenmp -lm -o $i
