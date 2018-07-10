@@ -708,6 +708,35 @@ float*** load_codes(char* phase_format, char* img_format, char numbered_imgs,
     return codes;
 }
 
+float*** quadratic_codes(float*** orig_codes, int nb_patterns, int w, int h) {
+
+    int nb_extended = (nb_patterns + 1) * nb_patterns / 2;
+    float*** codes = malloc_f32cube(nb_extended, w, h);
+
+    #pragma omp parallel for
+    for(int k=0; k < nb_patterns; k++)
+        for(int i=0; i < h; i++)
+            for(int j=0; j < w; j++)
+                codes[k][i][j] = orig_codes[k][i][j];
+
+    int k=nb_patterns;
+
+    for(int i_ref=0; i_ref < nb_patterns; i_ref++) {
+        for(int j_ref=i_ref + 1; j_ref < nb_patterns; j_ref++) {
+
+            // Difference between pixel phases : [-2pi, 2pi] /2 => [-pi, pi]
+            #pragma omp parallel for
+            for(int i=0; i < h; i++)
+                for(int j=0; j < w; j++)
+                    codes[k][i][j] = (orig_codes[i_ref][i][j] - orig_codes[j_ref][i][j]) / 2.0;
+
+            k++;
+        }
+    }
+
+    return codes;
+}
+
 void save_phase(float*** intensities, char* filename, int nb_shifts, int w, int h) {
     float** image = malloc_f32matrix(w, h);
 

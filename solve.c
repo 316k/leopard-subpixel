@@ -175,8 +175,7 @@ void hash_from_codes(float*** matches, float*** from_codes, float*** to_codes,
     free(pixel_code);
 }
 
-void lsh(float*** matches, float*** from_codes, float*** to_codes,
-         int nb_patterns, char use_heuristics) {
+void lsh(float*** matches, float*** from_codes, float*** to_codes, char use_heuristics) {
 
     int i, j;
     //int nb_values = 3; // (inexact->integer (ceiling (/ nb-patterns 2))))
@@ -290,7 +289,8 @@ int main(int argc, char** argv) {
     }
     fseek(info, 0, SEEK_SET);
 
-    int nthreads = 4, nb_iterations = 30, nb_waves, nb_shifts, disable_heuristics = 0, proj_lut = 0;
+    int nthreads = 4, nb_iterations = 30, nb_waves, nb_shifts,
+        disable_heuristics = 0, proj_lut = 0, use_quadratic_codes = 0;
 
     float hash_table_ratio = 2.0;
 
@@ -326,12 +326,16 @@ int main(int argc, char** argv) {
     ARG_CASE('r')
         hash_table_ratio = ARGF;
 
+    ARG_CASE('q')
+
+        use_quadratic_codes = 1;
+
     WRONG_ARG
         printf("usage: %s [-t nb_threads=%d] [-p gen_proj_lut]\n"
                "\t[-c cam_format=\"%s\"]\n"
                "\t[-i nb_iterations=%d] [-d (disable heuristics)]\n"
                "\t[-b nb_boxes=%d] [-v nb_values=%d]\n"
-               "\t[-r hash_table_ratio=%f]\n",
+               "\t[-r hash_table_ratio=%f] [-q use_quadratic_codes]\n",
                argv0, nthreads, cam_format, nb_iterations,
                nb_boxes, nb_values, hash_table_ratio);
         exit(1);
@@ -389,15 +393,27 @@ int main(int argc, char** argv) {
     float*** ref_codes;
     float*** cam_codes;
 
-    float* from_code = malloc(sizeof(float) * nb_patterns);
-    float* to_code = malloc(sizeof(float) * nb_patterns);
-
     cam_codes = load_codes(cam_phase_format, cam_format, !proj_lut, nb_patterns, nb_shifts, from_w, from_h);
     ref_codes = load_codes(ref_phase_format, ref_format, proj_lut, nb_patterns, nb_shifts, to_w, to_h);
 
+    if(use_quadratic_codes) {
+        float*** tmp_codes = cam_codes;
+        cam_codes = quadratic_codes(cam_codes, nb_patterns, from_w, from_h);
+        free_f32cube(tmp_codes, nb_patterns);
+
+        tmp_codes = ref_codes;
+        ref_codes = quadratic_codes(ref_codes, nb_patterns, to_w, to_h);
+        free_f32cube(tmp_codes, nb_patterns);
+
+        nb_patterns = (nb_patterns + 1) * nb_patterns / 2;
+    }
+
+    float* from_code = malloc(sizeof(float) * nb_patterns);
+    float* to_code = malloc(sizeof(float) * nb_patterns);
+
     for(l=0; l<nb_iterations; l++) {
         printf("----- Iteration %02d -----\n", l);
-        lsh(matches, cam_codes, ref_codes, nb_patterns,
+        lsh(matches, cam_codes, ref_codes,
             // heuristics every 5 turn
             !disable_heuristics && l % 5 == 0 && l != 0);
 
