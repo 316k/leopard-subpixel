@@ -44,8 +44,8 @@ Use `./solve -help` to see the list of options.
 
 ### 4. Run `subpixel`
 
-Use `./subpixel matches-29.ppm` to interpolate and get subpixel
+Use `./subpixel lutCam29.ppm` to interpolate and get subpixel
 accuracy.
 
-This will generate the file `subpixel.ppm`, which should be your final
+This will generate the file `lutSubCam.ppm`, which should be your final
 image.

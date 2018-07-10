@@ -279,15 +279,6 @@ void lsh(float*** matches, float*** from_codes, float*** to_codes, char use_heur
 int main(int argc, char** argv) {
 
     int i, j, k, l;
-    FILE* info = fopen("sines.txt", "r");
-
-    // Check file size to avoid problems if sines.txt is empty
-    fseek(info, 0, SEEK_END);
-    if(!ftell(info)) {
-        printf("error: empty sines.txt\n");
-        exit(-1);
-    }
-    fseek(info, 0, SEEK_SET);
 
     int nthreads = 4, nb_iterations = 30, nb_waves, nb_shifts,
         disable_heuristics = 0, proj_lut = 0, use_quadratic_codes = 0;
@@ -345,6 +336,19 @@ int main(int argc, char** argv) {
     omp_set_num_threads(nthreads);
 
     srand(time(NULL));
+
+
+    // Check file size to avoid problems if sines.txt is empty
+    FILE* info = fopen("sines.txt", "r");
+
+    if(info != NULL)
+        fseek(info, 0, SEEK_END);
+
+    if(info == NULL || !ftell(info)) {
+        printf("error: empty sines.txt\n");
+        exit(-1);
+    }
+    fseek(info, 0, SEEK_SET);
 
     fscanf(info, "%d %d %d %d %d",
            &to_w, &to_h, &nb_waves, &nb_patterns, &nb_shifts);
