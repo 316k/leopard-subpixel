@@ -12,7 +12,10 @@ int main(int argc, char** argv) {
     int i, j;
     int nthreads = 4, w = 1920, h = 1080,
         nb_waves = 32, nb_shifts = 3,
-        nb_patterns = 40;
+        nb_patterns = 40,
+        init_seed = 1337;
+
+    float base_freq = 0.02;
 
     ARGBEGIN
         ARG_CASE('t')
@@ -33,10 +36,17 @@ int main(int argc, char** argv) {
     ARG_CASE('n')
         nb_patterns = ARGI;
 
+    ARG_CASE('f')
+        base_freq = ARGF;
+
+    LARG_CASE("seed")
+        init_seed = ARGI;
+
     WRONG_ARG
             printf("usage: %s [-t nb_threads=%d] [-w width=%d] [-h height=%d]\n"
-                   "\t\t[-q nb_waves=%d] [-s nb_shifts=%d] [-n nb_patterns=%d]\n", argv0,
-                   nthreads, w, h, nb_waves, nb_shifts, nb_patterns);
+                   "\t\t[-q nb_waves=%d] [-s nb_shifts=%d] [-n nb_patterns=%d]\n"
+                   "\t\t[-f base_freq=%f] [--seed init_seed=%d]\n", argv0,
+                   nthreads, w, h, nb_waves, nb_shifts, nb_patterns, base_freq, init_seed);
             exit(0);
 
     ARGEND
@@ -45,12 +55,9 @@ int main(int argc, char** argv) {
     // Init image matrix
     float** image = malloc_f32matrix(w, h);
 
-    float base_freq = 0.02;
     float* phases = malloc(sizeof(float) * nb_waves);
     float* angles = malloc(sizeof(float) * nb_waves);
     float* freqs  = malloc(sizeof(float) * nb_waves);
-
-    srand(time(NULL));
 
     FILE* info = fopen("sines.txt", "w+");
     fprintf(info, "%d %d %d %d %d\n", w, h, nb_waves, nb_patterns, nb_shifts);
@@ -59,14 +66,14 @@ int main(int argc, char** argv) {
         printf("Rendering pattern %03d\n", n);
 
         for(i=0; i<nb_waves; i++) {
+            srand(init_seed + n * 900 + i);
             phases[i] = rand()/(float)RAND_MAX * 2 * PI;
             angles[i] = rand()/(float)RAND_MAX * PI;
             freqs[i] = base_freq * pow(2, 2 * rand()/(float)RAND_MAX - 1);
             fprintf(info, "%f %f %f ", phases[i], angles[i], freqs[i]);
         }
 
-        if(n != nb_patterns - 1)
-            fprintf(info, "\n");
+        fprintf(info, "\n");
 
         float*** intensities = malloc_f32cube(nb_shifts, w, h);
 
