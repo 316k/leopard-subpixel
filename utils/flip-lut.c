@@ -55,8 +55,8 @@ int main(char argc, char** argv) {
             float x = lut[0][i][j] / 65535.0;
             float y = lut[1][i][j] / 65535.0;
 
-            int img_y = y * img_h;
-            int img_x = x * img_w;
+            int img_y = (int) (y * img_h + 0.5);
+            int img_x = (int) (x * img_w + 0.5);
 
             if(lut[2][i][j] / 65535.0 < threshold) {
                 out[i][j] = img[img_y][img_x];

@@ -45,6 +45,9 @@ int main(char argc, char** argv) {
     int size;
 
     FILE *f = fopen(argv[0], "r");
+
+    require_file(f, argv[0]);
+
     read_image_header(f, &w, &h, &size);
     fclose(f);
 
