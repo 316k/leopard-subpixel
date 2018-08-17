@@ -20,7 +20,7 @@ float get(float** matrix, int i, int j, int w, int h) {
 
 int main(int argc, char** argv) {
 
-    int nthreads = 4, i, j, k, w = 1920, h = 1080;
+    int nthreads = 4, i, j, w = 1920, h = 1080;
 
     float x = 0.0, y = 0.0;
 
@@ -64,31 +64,6 @@ int main(int argc, char** argv) {
             out[Y][i][j] = i + y;
             out[DIST][i][j] = 0;
         }
-
-    FILE* vals;
-
-    for(k=0; k<2; k++) {
-        float min = INFINITY;
-        float dec = 0;
-        float max = -INFINITY;
-
-        if(k == 0)
-            vals = fopen("subpixel-x-ref", "w");
-        else
-            vals = fopen("subpixel-y-ref", "w");
-
-        for(i=1; i<h-1; i++)
-            for(j=1; j<w-1; j++) {
-                dec += out[k][i][j] - floor(out[k][i][j]);
-                min = fmin(min, out[k][i][j] - floor(out[k][i][j]));
-                max = fmax(max, out[k][i][j] - floor(out[k][i][j]));
-                fprintf(vals, "%f\n", out[k][i][j] - floor(out[k][i][j]));
-            }
-
-        dec /= (h - 2) * (w - 2);
-        fprintf(stderr, "avg=%f min=%f max=%f\n", dec, min, max);
-        fclose(vals);
-    }
 
     save_color_map(NULL, out, w, h, w, h, 1);
 
