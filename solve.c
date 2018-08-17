@@ -420,14 +420,13 @@ int main(int argc, char** argv) {
 
     if(use_quadratic_codes) {
         float*** tmp_codes = cam_codes;
-        cam_codes = quadratic_codes(cam_codes, nb_patterns, from_w, from_h);
-        free_f32cube(tmp_codes, nb_patterns);
+        int orig_nb_patterns = nb_patterns;
+        cam_codes = quadratic_codes(cam_codes, orig_nb_patterns, from_w, from_h, &nb_patterns);
+        free_f32cube(tmp_codes, orig_nb_patterns);
 
         tmp_codes = ref_codes;
-        ref_codes = quadratic_codes(ref_codes, nb_patterns, to_w, to_h);
-        free_f32cube(tmp_codes, nb_patterns);
-
-        nb_patterns = (nb_patterns + 1) * nb_patterns / 2;
+        ref_codes = quadratic_codes(ref_codes, orig_nb_patterns, to_w, to_h, &nb_patterns);
+        free_f32cube(tmp_codes, orig_nb_patterns);
     }
 
     float* from_code = malloc(sizeof(float) * nb_patterns);

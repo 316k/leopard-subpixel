@@ -1,10 +1,19 @@
 #include <unistd.h>
+#include <errno.h>
+extern int errno;
 
 #define X 0
 #define Y 1
 #define DIST 2
 
 const float PI = 2 * atan2(1, 0);
+
+void require_file(FILE* f, char* fname) {
+    if(f == NULL) {
+        fprintf(stderr, "%s: %s\n", fname, strerror(errno));
+        exit(errno);
+    }
+}
 
 // --------------- Images ---------------
 float** malloc_f32matrix(int w, int h) {
@@ -66,10 +75,7 @@ float** load_pgm(char* name, int *w, int *h) {
     float** mat;
     FILE *f = fopen(name, "r");
 
-    if(f == NULL) {
-        printf("%s: No such file or directory\n", name);
-        exit(1);
-    }
+    require_file(f, name);
 
     read_image_header(f, w, h, &size);
 
@@ -104,10 +110,7 @@ float*** load_ppm(char* name, int *w, int *h) {
 
     FILE *f = fopen(name, "r");
 
-    if(f == NULL) {
-        printf("%s: No such file or directory\n", name);
-        exit(1);
-    }
+    require_file(f, name);
 
     read_image_header(f, w, h, &size);
 
@@ -759,9 +762,16 @@ float** load_mask(char* img_format, int nb_patterns, int w, int h) {
     return mask;
 }
 
-float*** quadratic_codes(float*** orig_codes, int nb_patterns, int w, int h) {
+float*** quadratic_codes(float*** orig_codes, int nb_patterns, int w, int h, int* new_nb_patterns) {
 
     int nb_extended = (nb_patterns + 1) * nb_patterns / 2;
+
+    // Limit
+    if(nb_extended > 300)
+        nb_extended = 300;
+
+    *new_nb_patterns = nb_extended;
+
     float*** codes = malloc_f32cube(nb_extended, w, h);
 
     #pragma omp parallel for
@@ -782,8 +792,13 @@ float*** quadratic_codes(float*** orig_codes, int nb_patterns, int w, int h) {
                     codes[k][i][j] = (orig_codes[i_ref][i][j] - orig_codes[j_ref][i][j]) / 2.0;
 
             k++;
+
+            if(k == nb_extended)
+                goto end_copy;
         }
     }
+
+end_copy:
 
     return codes;
 }
