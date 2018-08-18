@@ -414,7 +414,7 @@ int main(int argc, char** argv) {
 
     if(mask_threshold != -1) {
 
-        mask = load_mask(cam_format, nb_patterns, from_w, from_h);
+        mask = load_mask(proj_lut ? ref_format : cam_format, nb_patterns, from_w, from_h);
 
     }
 
