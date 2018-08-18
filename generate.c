@@ -82,17 +82,17 @@ int main(int argc, char** argv) {
 
             // Cos addition
             for(int wave = 0; wave < nb_waves; wave++) {
+
+                float fx, fy, phase;
+
+                fx = 2 * PI * freqs[wave] * sin(angles[wave]);
+                fy = 2 * PI * freqs[wave] * cos(angles[wave]);
+
+                phase = phases[wave] + shift * 2.0 * PI / (float) nb_shifts;
+
                 #pragma omp parallel for private(i, j)
                 for(i=0; i < h; i++) {
                     for(j=0; j < w; j++) {
-
-                        float fx, fy, phase;
-
-                        fx = 2 * PI * freqs[wave] * sin(angles[wave]);
-                        fy = 2 * PI * freqs[wave] * cos(angles[wave]);
-
-                        phase = phases[wave] + shift * 2.0 * PI / (float) nb_shifts;
-
                         image[i][j] += cosf(fy * i + fx * j + phase);
                     }
                 }
