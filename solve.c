@@ -16,7 +16,7 @@ float hash_divider;
 
 // Threshold to consider a pixel as part of the scanned zone
 // -1 == disable mask, hash all pixels
-float mask_threshold = -1;
+float mask_threshold = 20;
 float** mask;
 
 #define HASH_TO_CODES()   hash_to_codes(to_codes, hash_table, phases_used, i, j, &nb_collisions)
