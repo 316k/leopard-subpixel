@@ -303,7 +303,6 @@ int main(int argc, char** argv) {
     ARG_CASE('p')
 
         proj_lut = 1;
-        // TODO : implement mask for lutProj
         mask_threshold = -1;
 
     ARG_CASE('c')
@@ -330,7 +329,10 @@ int main(int argc, char** argv) {
 
     ARG_CASE('m')
 
-        mask_threshold = ARGF;
+        if(proj_lut)
+            fprintf(stderr, "*** WARNING : -m has no effect when -p is enabled\n");
+        else
+            mask_threshold = ARGF;
 
     WRONG_ARG
         printf("usage: %s [-t nb_threads=%d] [-p gen_proj_lut]\n"
