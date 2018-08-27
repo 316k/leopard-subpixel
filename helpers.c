@@ -6,6 +6,8 @@ extern int errno;
 #define Y 1
 #define DIST 2
 
+#define FNAME_MAX_LEN 50
+
 const float PI = 2 * atan2(1, 0);
 
 void require_file(FILE* f, char* fname) {
@@ -49,6 +51,31 @@ void free_f32cube(float*** cube, int k) {
     }
 
     free(cube);
+}
+
+// TODO : use this function for more portability
+char** image_fnames(char* img_format, char numbered_imgs, int nb_patterns, int nb_shifts, int w, int h) {
+
+    int nb_imgs = nb_patterns * nb_shifts;
+
+    char** fnames = malloc(sizeof(char*) * nb_imgs);
+    fnames[0] = (char*) calloc(nb_imgs * FNAME_MAX_LEN, sizeof(char));
+
+    for(int i=0; i < nb_patterns; i++) {
+        for(int shift=0; shift < nb_shifts; shift++) {
+
+            int img_nb = i * nb_shifts + shift;
+
+            fnames[img_nb] = (*fnames + FNAME_MAX_LEN * img_nb);
+
+            if(numbered_imgs)
+                sprintf(fnames[img_nb], img_format, img_nb);
+            else
+                sprintf(fnames[img_nb], img_format, w, h, i, shift);
+        }
+    }
+
+    return fnames;
 }
 
 void read_image_header(FILE* f, int *w, int *h, int *size) {
@@ -252,7 +279,7 @@ float solve_phase_term(float* intensities, int nb_shifts, float (*trigo)(float))
         total += trigo(2 * i * PI /(float) nb_shifts) * intensities[i];
     }
 
-    return  total;
+    return total;
 }
 
 float solve_phase(float* intensities, int nb_shifts) {
