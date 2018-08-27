@@ -18,6 +18,8 @@ criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
 objp = np.zeros((H*W,3), np.float32)
 objp[:,:2] = np.mgrid[0:W,0:H].T.reshape(-1,2)
 
+nb_matches = 0
+
 for fname in argv[1:]:
     img = cv2.imread(fname)
     gray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
@@ -27,6 +29,8 @@ for fname in argv[1:]:
 
     # If found, add object points, image points (after refining them)
     if ret == True:
+        nb_matches += 1
+
         # Draw and display the corners
         cv2.cornerSubPix(gray, corners, (11,11), (-1,-1), criteria)
         cv2.drawChessboardCorners(img, (W,H), corners, ret)
@@ -41,3 +45,6 @@ for fname in argv[1:]:
 
     else:
         print("No match for :", fname)
+
+
+print("Found", nb_matches, "matches")
