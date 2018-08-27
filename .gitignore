@@ -20,3 +20,4 @@ presentation.pdf
 utils/flip-lut
 utils/split-ppm
 utils/join-ppm
+utils/spread-ppm
