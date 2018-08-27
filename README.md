@@ -10,7 +10,7 @@ You'll need `gcc` to build these programs
 for i in generate solve subpixel translation subpixel-reference \
          error validate dump_pixels
 do
-    gcc -g $i.c -fopenmp -lm -o $i
+    gcc -std=c99 $i.c -fopenmp -lm -o $i
 done
 ```
 
