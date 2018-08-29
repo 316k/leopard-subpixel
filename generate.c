@@ -70,10 +70,18 @@ int main(int argc, char** argv) {
             phases[i] = rand()/(float)RAND_MAX * 2 * PI;
             angles[i] = rand()/(float)RAND_MAX * PI;
             freqs[i] = base_freq * pow(2, 2 * rand()/(float)RAND_MAX - 1);
-            fprintf(info, "%f %f %f ", phases[i], angles[i], freqs[i]);
         }
 
-        fprintf(info, "\n");
+        float** arrays[3] = {&phases, &angles, &freqs};
+        for(int arr=0; arr<3; arr++) {
+            for(i=0; i<nb_waves; i++) {
+                fprintf(info, "%f", (*arrays[arr])[i]);
+
+                if(i < nb_waves - 1)
+                    fputc(' ', info);
+            }
+            fputc('\n', info);
+        }
 
         float*** intensities = malloc_f32cube(nb_shifts, w, h);
 
@@ -85,8 +93,8 @@ int main(int argc, char** argv) {
 
                 float fx, fy, phase;
 
-                fx = 2 * PI * freqs[wave] * sin(angles[wave]);
-                fy = 2 * PI * freqs[wave] * cos(angles[wave]);
+                fx = 2 * PI * freqs[wave] * sinf(angles[wave]);
+                fy = 2 * PI * freqs[wave] * cosf(angles[wave]);
 
                 phase = phases[wave] + shift * 2.0 * PI / (float) nb_shifts;
 
