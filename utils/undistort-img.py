@@ -40,7 +40,7 @@ else:
     cv2.imshow('Undistorted', dst)
 
     while True:
-        key = cv2.waitKey(10)
+        key = cv2.waitKey(10) & 0xFF
 
         if key == 27:
             break

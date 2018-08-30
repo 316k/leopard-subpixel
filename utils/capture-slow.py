@@ -98,12 +98,12 @@ while True:
 
     last = img
 
-    key = cv2.waitKey(10)
+    key = cv2.waitKey(10) & 0xFF
 
     if key == 27:
         break
 
-    if key == 102:
+    if key == ord('f'):
         print(cv2.getWindowProperty("ref", cv2.WND_PROP_FULLSCREEN))
         cv2.setWindowProperty("ref", cv2.WND_PROP_FULLSCREEN, 4);
 

@@ -66,7 +66,8 @@ while True:
 
     last = img
 
-    key = cv2.waitKey(10)
+    key = cv2.waitKey(10) & 0xFF
+
     if key == 27:
         break
 

@@ -37,7 +37,8 @@ for fname in argv[1:]:
 
         cv2.imshow(fname, img)
 
-        key = cv2.waitKey(0)
+        key = cv2.waitKey(0) & 0xFF
+
         if key == 27:
             break
 

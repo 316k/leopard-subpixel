@@ -87,12 +87,12 @@ print_arr(mtx)
 
 print("# Rotations")
 for i, r in enumerate(rvecs):
-    print(valid_images[i])
+    print('#', valid_images[i])
     print_arr(cv2.Rodrigues(r)[0])
 
 print("# Translations")
 for i, t in enumerate(tvecs):
-    print(valid_images[i])
+    print('#', valid_images[i])
     print_arr(t)
 
 print("# Distortion coeffs")

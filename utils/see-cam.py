@@ -60,7 +60,8 @@ while True:
 
     cv2.imshow("input", overlay)
     
-    key = cv2.waitKey(10)
+    key = cv2.waitKey(10) & 0xFF
+
     if key == 27:
         break
     elif key == ord('s'):
