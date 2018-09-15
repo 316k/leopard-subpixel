@@ -10,6 +10,8 @@ import cv2
 
 from sys import argv
 
+from helpers import eprint
+
 # Args
 arg0 = argv[0]
 
@@ -17,17 +19,21 @@ argv = argv[1:]
 
 verbose = False
 no_radial_disto = False
+external_from_first_checkerboard = False
 
 while len(argv) and argv[0].startswith('-') and argv[0] != '--':
     if argv[0] == '-v':
         verbose = True
     elif argv[0] == '-p':
         no_radial_disto = True
+    elif argv[0] == '-e':
+        external_from_first_checkerboard = True
 
     argv = argv[1:]
 
 if len(argv) == 0:
-    print('usage: calibrate.py [-v verbose] [-p no radial disto] checkerboards...')
+    print('usage: calibrate.py [-v verbose] [-p no radial disto] [-e] checkerboards...')
+    print('\t-e: pick rotation/translation from the first checkerboard')
     exit(1)
 
 # Actual stuff
@@ -46,7 +52,7 @@ imgpoints = [] # 2d points in image plane.
 
 valid_images = []
 
-for fname in argv:
+for i, fname in enumerate(argv):
     img = cv2.imread(fname)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     # Find the chess board corners
@@ -64,7 +70,9 @@ for fname in argv:
         imgpoints.append(corners)
 
         valid_images.append(fname)
-
+    elif external_from_first_checkerboard and i == 0:
+        eprint('Error: First checkerboard not detected')
+        exit(1)
 
 flags = []
 
@@ -90,10 +98,16 @@ for i, r in enumerate(rvecs):
     print('#', valid_images[i])
     print_arr(cv2.Rodrigues(r)[0])
 
+    if external_from_first_checkerboard:
+        break
+
 print("# Translations")
 for i, t in enumerate(tvecs):
     print('#', valid_images[i])
     print_arr(t)
+
+    if external_from_first_checkerboard:
+        break
 
 print("# Distortion coeffs")
 print_arr(dist)
