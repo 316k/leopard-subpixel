@@ -10,7 +10,7 @@ import cv2
 
 from sys import argv
 
-from helpers import eprint
+from helpers import eprint, print_arr
 
 # Args
 arg0 = argv[0]
@@ -84,11 +84,6 @@ if no_radial_disto:
     ]
 
 ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, gray.shape[::-1], None, None, flags=reduce(lambda acc, x: acc | x, flags, 0))
-
-def print_arr(arr):
-    for line in arr:
-        print('\t'.join(map(str, line)))
-    print()
 
 print("# Internes")
 print_arr(mtx)

@@ -1,9 +1,10 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
-from __future__ import division
+from __future__ import division, print_function
 
-from PIL import Image
+#from PIL import Image
 import numpy as np
+import cv2
 
 # Pillow PNG stuff
 def img(path):
@@ -25,7 +26,7 @@ def read_pgm(f):
     """Return a raster of integers from a PGM as a list of lists."""
     line = f.readline()
 
-    while line[0] == '#':
+    while line[0] in (35, '#'): # python2/3 shenanigans
         line = f.readline()
 
     width, height = [int(i) for i in line.split()]
@@ -49,7 +50,7 @@ def read_ppm(f):
     """Return a raster of integers from a PGM as a list of lists."""
     line = f.readline()
 
-    while line[0] == '#':
+    while line[0] in (35, '#'): # python2/3 shenanigans
         line = f.readline()
 
     width, height = [int(i) for i in line.split()]
@@ -71,22 +72,35 @@ def read_ppm(f):
     return raster, depth
 
 def read_img(fname):
-    f = open(fname, 'rb')
-    header = f.readline()
 
-    if header == "P5\n":
-        return read_pgm(f)
-    elif header == "P6\n":
-        return read_ppm(f)
+    img = cv2.imread(fname, -1)
 
-    print fname + ": not a ppm or pgm"
-    exit(-1)
+    if len(img.shape) == 3:
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+    return img.astype('float64'), 65535 if img.dtype == 'uint16' else 255
+
+    # f = open(fname, 'rb')
+    # header = f.readline()
+
+    # if header == b'P5\n':
+    #     return read_pgm(f)
+    # elif header == b'P6\n':
+    #     return read_ppm(f)
+
+    # print(fname + ": not a ppm or pgm")
+    # exit(-1)
 
 def save_pgm(fname, out, depth):
+
+    # dtype = 'u1' if depth == 8 else '>u2'
+    # copy = np.array(out, dtype=dtype)
+    # cv2.imwrite(fname, copy)
+
     h, w = out.shape[0], out.shape[1]
 
     with open(fname, 'wb') as f:
-        
+
         f.write("P5\n{} {}\n{}\n".format(w, h, (1<<depth) - 1))
 
         dtype = 'u1' if depth == 8 else '>u2'
@@ -95,11 +109,18 @@ def save_pgm(fname, out, depth):
 
         f.write(copy.tostring())
 
+# TODO : deprecate
 def save_ppm(fname, out, depth):
+
+    # dtype = 'u1' if depth == 8 else '>u2'
+    # copy = np.array(out, dtype=dtype)
+    # #cv2.imwrite(fname, cv2.cvtColor(copy, cv2.COLOR_RGB2BGR))
+    # cv2.imwrite(fname, copy)
+
     h, w = out.shape[0], out.shape[1]
 
     with open(fname, 'wb') as f:
-        
+
         f.write("P6\n{} {}\n{}\n".format(w, h, (1<<depth) - 1))
 
         dtype = 'u1' if depth == 8 else '>u2'
@@ -110,12 +131,20 @@ def save_ppm(fname, out, depth):
 
 def write_img(fname, arr, depth=16):
 
-    if len(arr.shape) == 3:
-        save_ppm(fname, arr, depth)
-    elif len(arr.shape) == 2:
-        save_pgm(fname, arr, depth)
-    else:
-        raise ValueError("Wrong array")
+
+    img = arr.astype('uint' + str(depth))
+
+    if len(img.shape) == 3:
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+    cv2.imwrite(fname, img)
+
+    # if len(arr.shape) == 3:
+    #     save_ppm(fname, arr, depth)
+    # elif len(arr.shape) == 2:
+    #     save_pgm(fname, arr, depth)
+    # else:
+    #     raise ValueError("Wrong array")
 
 if __name__ == "__main__":
     img = np.zeros((600, 100))

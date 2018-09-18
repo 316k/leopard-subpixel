@@ -11,8 +11,27 @@ from sys import stderr
 def eprint(*args, **kwargs):
     print(*args, file=stderr, **kwargs)
 
-def pose_matrix(rotation_mat, translation_mat):
+def print_arr(arr):
+    for line in arr:
+        print('\t'.join(map(str, line)))
+    print()
+
+def eprint_arr(arr):
+    for line in arr:
+        eprint('\t'.join(map(str, line)))
+    eprint()
+
+def pose_matrix_from_proj(rotation_mat, translation_mat):
     return np.identity(4)[:-1, :].dot(translation_mat.dot(rotation_mat))
+
+def pose_matrix_from_eucl(rotation, translation):
+    translation_mat = np.identity(4)
+    translation_mat[:-1, -1] = translation
+
+    rotation_mat = np.identity(4)
+    rotation_mat[:-1, :-1] = rotation
+
+    return pose_matrix_from_proj(rotation_mat, translation_mat)
 
 def calib_params(fname):
     """Lit les paramètres de la caméra depuis un fichier"""
@@ -23,19 +42,27 @@ def calib_params(fname):
 
     assert len(lines) == 10, "Unrecognized calibration file: " + fname
 
-    internes = np.array(map(lambda x: map(float, x.split('\t')), lines[0:3]))
-    rotation = np.array(map(lambda x: map(float, x.split('\t')), lines[3:6]))
-    translation = np.array(map(float, lines[6:9]))
-    distortion_coeffs = np.array(map(float, lines[9].split('\t')))
+    internes = np.array(list(map(lambda x: list(map(float, x.split('\t'))), lines[0:3])))
+    rotation = np.array(list(map(lambda x: list(map(float, x.split('\t'))), lines[3:6])))
+    translation = np.array(list(map(float, lines[6:9])))
+    distortion_coeffs = np.array(list(map(float, lines[9].split('\t'))))
 
-    translation_mat = np.identity(4)
-    translation_mat[:-1, -1] = translation
+    return internes, pose_matrix_from_eucl(rotation, translation), distortion_coeffs
 
-    rotation_mat = np.identity(4)
-    rotation_mat[:-1, :-1] = rotation
+def generate_xy_list(lut, threshold):
+    """Returns a list of (x, y) values associated with each pixel under
+       the threshold (blue-channel).
+    """
+    grid = np.zeros((lut.shape[0], lut.shape[1], 2), dtype=int)
 
-    return internes, pose_matrix(rotation_mat, translation_mat), distortion_coeffs
+    for y, row in enumerate(lut):
+        for x, col in enumerate(row):
+            grid[y][x][0] = x
+            grid[y][x][1] = y
 
+    xy = grid[lut[:, :, 2]/65535 < threshold]
+
+    return xy
 
 # triangulation::matrixCorr
 def compute_pixel_points(lut1, lut2, threshold=0.1):

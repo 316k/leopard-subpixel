@@ -36,14 +36,7 @@ threshold = 1 #0.40
 if len(argv) > 5:
     lut3d = np.zeros((lut1.shape[0], lut1.shape[1], 3))
 
-    grid = np.zeros((lut1.shape[0], lut1.shape[1], 2), dtype=int)
-
-    for y, row in enumerate(lut1):
-        for x, col in enumerate(row):
-            grid[y][x][0] = x
-            grid[y][x][1] = y
-
-    xy = grid[lut1[:, :, 2]/65535 < threshold]
+    xy = generate_xy_list(lut1, threshold)
 
 pts = triangulate(lut1, internes1, disto1, pose1, lut2, internes2, disto2, pose2, threshold)
 
