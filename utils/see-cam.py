@@ -14,7 +14,7 @@ from glob import glob
 
 fps = 30
 
-camera = 1
+camera = 0
 
 if len(argv) > 1:
     camera = int(argv[1])
