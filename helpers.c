@@ -187,7 +187,7 @@ void save_pgm(char* filename, float** image, int w, int h, int depth) {
 
             v = image[i][j];
 
-            if(v > max || v < 0.0) {
+            if(v > max || v < 0) {
                 fprintf(stderr, "*** WARNING : (%d, %d) = %f\n", i, j, image[i][j]);
                 v = fmin(fmax(v, 0), max);
             }
@@ -365,6 +365,99 @@ float** load_gray(char* fname, int *w, int *h) {
         return load_png_gray(fname, w, h);
 
     return load_pgm(fname, w, h);
+}
+
+void save_raw_png(char* filename, unsigned char* image, int w, int h, int depth, LodePNGColorType colortype) {
+
+    unsigned int width = w;
+    unsigned int height = h;
+
+    unsigned int error;
+    unsigned char* png;
+    size_t pngsize;
+    LodePNGState state;
+
+    lodepng_state_init(&state);
+
+    state.encoder.auto_convert = 0;
+
+    state.info_raw.colortype = colortype;
+    state.info_raw.bitdepth = depth;
+
+    state.info_png.color.colortype = colortype;
+    state.info_png.color.bitdepth = depth;
+
+    error = lodepng_encode(&png, &pngsize, image, width, height, &state);
+
+    if(!error)
+        error = lodepng_save_file(png, pngsize, filename);
+
+    if(error) {
+        fprintf(stderr, "error %u: %s\n", error, lodepng_error_text(error));
+    }
+
+    lodepng_state_cleanup(&state);
+    free(png);
+}
+
+void save_gray_png(char* filename, float** image, int w, int h, int depth) {
+
+    unsigned char* array = malloc(w * h * (depth == 16 ? 2 : 1));
+
+    unsigned int n = 0;
+
+    int max = depth == 16 ? 65535 : 255;
+
+    for(int i=0; i<h; i++)
+        for(int j=0; j<w; j++) {
+                int val = image[i][j];
+
+                if(val > max || val < 0) {
+                    fprintf(stderr, "*** WARNING : (%d, %d) = %f\n", i, j, image[i][j]);
+                    val = fmin(fmax(val, 0), max);
+                }
+
+                if(depth == 16) {
+                    array[n++] = val >> 8;
+                }
+
+                array[n++] = val & 255;
+        }
+
+    save_raw_png(filename, array, w, h, depth, LCT_GREY);
+
+    free(array);
+}
+
+void save_color_png(char* filename, float*** image, int w, int h, int depth) {
+
+    unsigned char* array = malloc(w * h * 3 * (depth == 16 ? 2 : 1));
+
+    unsigned int n = 0;
+
+    int max = depth == 16 ? 65535 : 255;
+
+    for(int i=0; i<h; i++)
+        for(int j=0; j<w; j++) {
+            for(int k=0; k<3; k++) {
+                int val = image[k][i][j];
+
+                if(val > max || val < 0) {
+                    fprintf(stderr, "*** WARNING : (%d, %d) = %f [channel=%d]\n", i, j, image[k][i][j], k);
+                    val = fmin(fmax(val, 0), max);
+                }
+
+                if(depth == 16) {
+                    array[n++] = val >> 8;
+                }
+
+                array[n++] = val & 255;
+            }
+        }
+
+    save_raw_png(filename, array, w, h, depth, LCT_RGB);
+
+    free(array);
 }
 
 // --------------- Misc calculations ---------------
