@@ -10,12 +10,13 @@ presentation.pdf
 ./generate
 ./solve
 ./subpixel
+./subpixel-grad
 ./enhance
 ./translation
 ./subpixel-reference
 ./error
 ./validate
-./dump_pixels
+./dump_gray_pixels
 ./sines
 utils/flip-lut
 utils/split-ppm
