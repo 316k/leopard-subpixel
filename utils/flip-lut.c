@@ -29,19 +29,20 @@ int main(char argc, char** argv) {
 
     WRONG_ARG
         usage:
-        printf("usage: %s [-t nthreads=%d] [-p err_threshold=%0.3f] cam-img.pgm proj-lut.ppm > out.pgm\n",
-               argv0, nthreads, threshold);
+        fprintf(stderr, "usage: %s [-t nthreads=%d] [-p err_threshold=%0.3f] cam-img.png proj-lut.png out.png\n",
+                argv0, nthreads, threshold);
         exit(1);
     ARGEND
 
     omp_set_num_threads(nthreads);
     srand(time(NULL));
 
-    if(argc != 2)
+    if(argc != 3)
         goto usage;
 
     char* cam_img_name = argv[0];
     char* proj_lut_name = argv[1];
+    char* out_name = argv[2];
 
     // Lecture de l'image pour trouver le from_w, from_h
     float** img = load_gray(cam_img_name, &img_w, &img_h);
@@ -63,7 +64,7 @@ int main(char argc, char** argv) {
             }
         }
 
-    save_pgm(NULL, out, lut_w, lut_h, 8);
+    save_gray_png(out_name, out, lut_w, lut_h, 8);
 
     return EXIT_SUCCESS;
 }

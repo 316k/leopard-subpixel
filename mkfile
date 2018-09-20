@@ -7,7 +7,7 @@ H=1080
 ITERATIONS=66
 
 .all:V: generate solve subpixel translation subpixel-reference \
-        error validate dump_pixels sines dump_subpixel
+        error validate dump_gray_pixels sines dump_subpixel
 
 reset:V: clean-cam
 	rm -f {leo,phase_ref}*.pgm sines.txt tmp.log *.png sine_*.pgm
@@ -17,8 +17,11 @@ clean-cam:V:
 
 clean-all:V: reset clean-cam
     rm -f generate solve subpixel translation subpixel-reference \
-       error validate dump_pixels sines dump_subpixel
+       error validate dump_gray_pixels sines dump_subpixel
     rm -f cube-ref.ppm
+
+example_decode: helpers.c lodepng.c example_decode.c
+    gcc -fopenmp -lm example_decode.c -o example_decode
 
 sines.txt: generate
      ./generate -s 3 -n 20 -w $W -h $H

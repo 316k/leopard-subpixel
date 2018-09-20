@@ -1,7 +1,7 @@
 /*
-  Dump pixel values from a PGM image in the format :
+  Dump pixel values from a grayscale image in the format :
 
-     x    y    pix_value_a [pix_value_b ...]
+     x    y    pix_value_a [pix_value_b [...]]
      ...
  */
 #include <stdlib.h>
@@ -28,7 +28,7 @@ int main(int argc, char** argv) {
         nthreads = ARGI;
     WRONG_ARG
         usage:
-        printf("usage: %s [-t nb_threads=%d] a.pgm [b.pgm ...]\n",
+        printf("usage: %s [-t nb_threads=%d] gray1.png [gray2.png ...]\n",
                argv0, nthreads);
         exit(1);
 
@@ -40,7 +40,7 @@ int main(int argc, char** argv) {
     float*** imgs = malloc(sizeof(float**) * argc);
 
     for(i=0; i<argc; i++)
-        imgs[i] = load_pgm(argv[i], &w, &h);
+        imgs[i] = load_gray(argv[i], &w, &h);
 
     for(i=0; i < h; i++)
         for(j=0; j<w; j++) {
