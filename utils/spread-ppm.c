@@ -45,7 +45,7 @@ int main(char argc, char** argv) {
     char* proj_lut_name = argv[0];
 
     // Lecture de l'image pour trouver le from_w, from_h
-    float*** lut = load_ppm(proj_lut_name, &lut_w, &lut_h);
+    float*** lut = load_color(proj_lut_name, &lut_w, &lut_h);
     float*** out = malloc_f32cube(3, lut_w, lut_h);
     float** swapped = malloc_f32matrix(lut_w, lut_h);
 

@@ -1,5 +1,7 @@
 #include <unistd.h>
 #include <errno.h>
+#include "lodepng.c"
+
 extern int errno;
 
 #define X 0
@@ -240,6 +242,129 @@ void save_ppm(char* filename, float** channels[3], int w, int h, int depth) {
     }
 
     fclose(out);
+}
+
+unsigned char* load_png(char* fname, int *w, int *h, int *depth, LodePNGColorType expected_type) {
+
+    unsigned int error;
+    unsigned char* image;
+    unsigned int width, height;
+    unsigned char* png = 0;
+    size_t pngsize;
+
+    LodePNGState state;
+
+    lodepng_state_init(&state);
+
+    state.info_raw.colortype = expected_type;
+
+    error = lodepng_load_file(&png, &pngsize, fname);
+
+    lodepng_inspect(&width, &height, &state, png, pngsize);
+
+    *depth = (int) state.info_png.color.bitdepth;
+    state.info_raw.bitdepth = state.info_png.color.bitdepth;
+
+    if(!error)
+        error = lodepng_decode(&image, &width, &height, &state, png, pngsize);
+
+    if(state.info_png.color.colortype != expected_type) {
+        fprintf(stderr, "%s: color type is not %s\n", fname, expected_type == LCT_RGB ? "RGB" : "Grayscale");
+        exit(-1);
+    }
+
+    if(error) {
+        fprintf(stderr, "error %u: %s\n", error, lodepng_error_text(error));
+        exit(error);
+    }
+
+    *w = (int) width;
+    *h = (int) height;
+
+    free(png);
+    lodepng_state_cleanup(&state);
+
+    return image;
+}
+
+float** load_png_gray(char* fname, int *w, int *h) {
+
+    int depth;
+
+    unsigned char* image = load_png(fname, w, h, &depth, LCT_GREY);
+
+    float** array = malloc_f32matrix(*w, *h);
+
+    unsigned int n = 0;
+    for(int i=0; i<*h; i++)
+        for(int j=0; j<*w; j++) {
+            int val = image[n++];
+
+            if(depth == 16)
+                val = (val << 8) + image[n++];
+
+            array[i][j] = val;
+        }
+
+    free(image);
+
+    return array;
+}
+
+float*** load_png_rgb(char* fname, int *w, int *h) {
+
+    int depth;
+
+    unsigned char* image = load_png(fname, w, h, &depth, LCT_RGB);
+
+    float*** array = malloc_f32cube(3, *w, *h);
+    unsigned int n = 0;
+    for(int i=0; i<*h; i++)
+        for(int j=0; j<*w; j++) {
+            for(int k=0; k<3; k++) {
+                int val = image[n++];
+
+                if(depth == 16)
+                    val = (val << 8) + image[n++];
+
+                array[k][i][j] = val;
+            }
+        }
+
+    free(image);
+
+    return array;
+}
+
+char is_png(char* fname) {
+
+    // Ensures file exists
+    FILE* f = fopen(fname, "r");
+    require_file(f, fname);
+    fclose(f);
+
+    int end = strlen(fname) - 4;
+
+    if(end < 0)
+        end = 0;
+
+    return strcmp(fname + end, ".png") == 0;
+}
+
+float*** load_color(char* fname, int *w, int *h) {
+
+    if(is_png(fname))
+        return load_png_rgb(fname, w, h);
+
+    return load_ppm(fname, w, h);
+}
+
+float** load_gray(char* fname, int *w, int *h) {
+
+    if(is_png(fname))
+        return load_png_gray(fname, w, h);
+
+    return load_pgm(fname, w, h);
 }
 
 // --------------- Misc calculations ---------------

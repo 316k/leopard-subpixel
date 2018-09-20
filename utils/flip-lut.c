@@ -44,8 +44,8 @@ int main(char argc, char** argv) {
     char* proj_lut_name = argv[1];
 
     // Lecture de l'image pour trouver le from_w, from_h
-    float** img = load_pgm(cam_img_name, &img_w, &img_h);
-    float*** lut = load_ppm(proj_lut_name, &lut_w, &lut_h);
+    float** img = load_gray(cam_img_name, &img_w, &img_h);
+    float*** lut = load_color(proj_lut_name, &lut_w, &lut_h);
     float** out = malloc_f32matrix(lut_w, lut_h);
 
     // Pour chaque pixel de la LUT, trouver l'équivalent dans l'image
