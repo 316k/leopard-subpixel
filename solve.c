@@ -1,3 +1,6 @@
+/*
+  Compute camera-projector LUTs from matching patterns/pictures
+*/
 #include <stdlib.h>
 #include <stdio.h>
 #include <omp.h>
@@ -77,7 +80,7 @@ void forward_matching(float*** matches, float*** from_codes, float*** to_codes,
 
             float distance = distance_modulo_pi(from_code, to_code, nb_patterns);
 
-            // Si la nouvelle distance est plus petite, on update le match
+            // When new distance is lower, update the match
             if(distance < matches[DIST][from_y][from_x]) {
                 matches[X][from_y][from_x]    = j;
                 matches[Y][from_y][from_x]    = i;
@@ -110,7 +113,7 @@ void backward_matching(float*** matches, float*** from_codes, float*** to_codes,
 
             float distance = distance_modulo_pi(from_code, to_code, nb_patterns);
 
-            // Si la nouvelle distance est plus petite, on update le match
+            // When it's a new match or new distance is lower, update the match
             if(distance == -1.0 || distance < matches[DIST][i][j]) {
                 matches[X][i][j]    = to_x;
                 matches[Y][i][j]    = to_y;
@@ -285,15 +288,17 @@ int main(int argc, char** argv) {
     int i, j, k, l;
 
     int nthreads = 4, nb_iterations = 30, nb_waves, nb_shifts,
-        disable_heuristics = 0, proj_lut = 0, use_quadratic_codes = 0;
+        disable_heuristics = 0, proj_lut = 0, use_quadratic_codes = 0,
+        dump_all_images = 0;
 
     float hash_table_ratio = 2.0;
 
-    char* ref_format = "leo_%d_%d_%03d_%02d.pgm";
-    char* cam_format = "%03d.pgm";
-    char* ref_phase_format = "phase_ref_%d_%d_%03d.pgm";
-    char* cam_phase_format = "phase_cam_%d_%d_%03d.pgm";
-    char filename[50];
+    char* ref_format = "leo_%03d.png";
+    char* cam_format = "%03d.png";
+    char* ref_phase_format = "phase_ref_%d_%d_%03d.png";
+    char* cam_phase_format = "phase_cam_%d_%d_%03d.png";
+
+    char filename[50]; // Generic filename buffer
 
     // Args parsing
     ARGBEGIN
@@ -301,9 +306,11 @@ int main(int argc, char** argv) {
         nthreads = ARGI;
 
     ARG_CASE('p')
-
         proj_lut = 1;
         mask_threshold = -1;
+
+    ARG_CASE('l')
+        ref_format = ARGS;
 
     ARG_CASE('c')
         cam_format = ARGS;
@@ -324,24 +331,25 @@ int main(int argc, char** argv) {
         hash_table_ratio = ARGF;
 
     ARG_CASE('q')
-
         use_quadratic_codes = 1;
 
     ARG_CASE('m')
-
         if(proj_lut)
             fprintf(stderr, "*** WARNING : -m has no effect when -p is enabled\n");
         else
             mask_threshold = ARGF;
 
+    LARG_CASE("dump-all-images")
+        dump_all_images = 1;
+
     WRONG_ARG
         printf("usage: %s [-t nb_threads=%d] [-p gen_proj_lut]\n"
-               "\t[-c cam_format=\"%s\"]\n"
+               "\t[-l ref_format=\"%s\"] [-c cam_format=\"%s\"]\n"
                "\t[-i nb_iterations=%d] [-d (disable heuristics)]\n"
                "\t[-b nb_boxes=%d] [-v nb_values=%d]\n"
                "\t[-r hash_table_ratio=%f] [-q use_quadratic_codes]\n"
-               "\t[-m mask_threshold=%f]\n",
-               argv0, nthreads, cam_format, nb_iterations,
+               "\t[-m mask_threshold=%f] [--dump-all-images]\n",
+               argv0, nthreads, ref_format, cam_format, nb_iterations,
                nb_boxes, nb_values, hash_table_ratio, mask_threshold);
         exit(1);
 
@@ -379,16 +387,17 @@ int main(int argc, char** argv) {
 
     // Lecture d'une image pour trouver le from_w, from_h
     sprintf(filename, cam_format, 0);
-    free_f32matrix(load_pgm(filename, &from_w, &from_h));
+    free_f32matrix(load_gray(filename, &from_w, &from_h));
 
 
     // Generating projector LUT => read captured images as projected
     // images
     if(proj_lut) {
-        ref_format = "%03d.pgm";
-        cam_format = "leo_%d_%d_%03d_%02d.pgm";
-        ref_phase_format = "phase_cam_%d_%d_%03d.pgm";
-        cam_phase_format = "phase_ref_%d_%d_%03d.pgm";
+        char* tmp_format = ref_format;
+        ref_format = cam_format;
+        cam_format = tmp_format;
+        ref_phase_format = "phase_cam_%d_%d_%03d.png";
+        cam_phase_format = "phase_ref_%d_%d_%03d.png";
 
         int tmp;
         tmp = from_w;
@@ -470,13 +479,15 @@ int main(int argc, char** argv) {
         }
 
         // Save the iteration
-        if(proj_lut)
-            sprintf(filename, "lutProj%02d.ppm", l);
-        else
-            sprintf(filename, "lutCam%02d.ppm", l);
+        if(dump_all_images || l == nb_iterations - 1 || l % 5 == 0) {
+            if(proj_lut)
+                sprintf(filename, "lutProj%02d.png", l);
+            else
+                sprintf(filename, "lutCam%02d.png", l);
 
-        save_color_map(filename, matches,
-                       from_w, from_h, to_w, to_h, nb_patterns * PI/2.0);
+            save_color_map(filename, matches,
+                           from_w, from_h, to_w, to_h, nb_patterns * PI/2.0);
+        }
     }
 
     return EXIT_SUCCESS;

@@ -1,3 +1,6 @@
+/*
+  Computes the identity subpixel LUT (each pixel mapped to itself)
+ */
 #include <stdlib.h>
 #include <stdio.h>
 #include <omp.h>
@@ -50,11 +53,16 @@ int main(int argc, char** argv) {
     WRONG_ARG
         usage:
         printf("usage: %s [-t nb_threads=%d] [-x del-x=%f] [-y del-y=%f]\n"
-               "\t[-w %d] [-h %d]\n",
+               "\t[-w %d] [-h %d] identity-lut.png\n",
                argv0, nthreads, x, y, w, h);
     exit(1);
 
     ARGEND
+
+    if(argc != 1)
+        goto usage;
+
+    char* fname = argv[0];
 
     float*** out = malloc_f32cube(3, w, h);
 
@@ -65,7 +73,7 @@ int main(int argc, char** argv) {
             out[DIST][i][j] = 0;
         }
 
-    save_color_map(NULL, out, w, h, w, h, 1);
+    save_color_map(fname, out, w, h, w, h, 1);
 
     return 0;
 }

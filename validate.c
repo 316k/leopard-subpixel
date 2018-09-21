@@ -22,17 +22,16 @@ int main(int argc, char** argv) {
         nthreads = ARGI;
     WRONG_ARG
         usage:
-        printf("usage: %s [-t nb_threads=%d] lut.ppm\n",
+        printf("usage: %s [-t nb_threads=%d] lut.png\n",
                argv0, nthreads);
     exit(1);
 
     ARGEND
 
-    if(argc < 1) {
+    if(argc != 1)
         goto usage;
-    }
 
-    float*** matches = load_ppm(argv[argc - 1], &w, &h);
+    float*** matches = load_color(argv[0], &w, &h);
 
     #pragma omp parallel for private(i, j)
     for(i=0; i<h; i++)

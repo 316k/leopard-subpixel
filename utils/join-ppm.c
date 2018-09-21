@@ -1,5 +1,6 @@
 /*
   Join three PGM images in a single PPM image
+  TODO: use PNG instead
  */
 #include <stdlib.h>
 #include <stdio.h>

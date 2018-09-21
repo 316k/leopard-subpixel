@@ -71,8 +71,10 @@ int main(int argc, char** argv) {
     int nthreads = 4, i, j, k, from_w, from_h, to_w, to_h, foo,
         nb_shifts, nb_patterns, debug_surface = 0, verbose = 0, proj_lut = 0;
 
-    char* ref_format = "leo_%d_%d_%03d_%02d.pgm";
-    char* cam_format = "%03d.pgm";
+    char* ref_format = "leo_%03d.png";
+    char* cam_format = "%03d.png";
+    char* ref_phase_format = "phase_ref_%d_%d_%03d.png";
+    char* cam_phase_format = "phase_cam_%d_%d_%03d.png";
 
     float step_decrease_rate = 0.8;
     int max_iters = 100;
@@ -104,7 +106,8 @@ int main(int argc, char** argv) {
     WRONG_ARG
         usage:
         printf("usage: %s [-t nb_threads=%d] [-p proj_lut] [-s|--slow-gradient]\n"
-               "\t[-d --debug-surface] [-v --verbose] filename\n\n"
+               "\t[-d --debug-surface] [-v --verbose] lut.png\n\n"
+               "outputs: lutSubCam.png (or lutSubProj.png if using -p)\n"
                "Enabling --slow-gradient will take more time, but might fix\n"
                "some slightly wrong matches\n",
                argv0, nthreads);
@@ -112,7 +115,7 @@ int main(int argc, char** argv) {
 
     ARGEND
 
-    if(argc < 1) goto usage;
+    if(argc != 1) goto usage;
 
     omp_set_num_threads(nthreads);
 
@@ -132,18 +135,16 @@ int main(int argc, char** argv) {
     fscanf(info, "%d %d %d %d %d", &to_w, &to_h, &foo, &nb_patterns, &nb_shifts);
     fclose(info);
 
-    char* ref_phase_format = "phase_ref_%d_%d_%03d.pgm";
-    char* cam_phase_format = "phase_cam_%d_%d_%03d.pgm";
-
-    float*** matches = load_ppm(argv[argc - 1], &from_w, &from_h);
+    float*** matches = load_color(argv[0], &from_w, &from_h);
 
     // Generating projector LUT => read captured images as projected
     // images
     if(proj_lut) {
-        ref_format = "%03d.pgm";
-        cam_format = "leo_%d_%d_%03d_%02d.pgm";
-        ref_phase_format = "phase_cam_%d_%d_%03d.pgm";
-        cam_phase_format = "phase_ref_%d_%d_%03d.pgm";
+        char* tmp_format = ref_format;
+        ref_format = cam_format;
+        cam_format = tmp_format;
+        ref_phase_format = "phase_cam_%d_%d_%03d.png";
+        cam_phase_format = "phase_ref_%d_%d_%03d.png";
 
         int tmp;
         tmp = from_w;
@@ -285,11 +286,11 @@ int main(int argc, char** argv) {
             }
         }
 
-        save_ppm("debug-subpixel.ppm", out_colormap, from_w, from_h, 8);
+        save_color_png("debug-subpixel.png", out_colormap, from_w, from_h, 8);
     }
 
     save_color_map(
-        proj_lut ? "lutSubProj.ppm" : "lutSubCam.ppm",
+        proj_lut ? "lutSubProj.png" : "lutSubCam.png",
         subpixel, from_w, from_h, to_w, to_h, nb_patterns * PI/2.0);
 
     if(verbose) {

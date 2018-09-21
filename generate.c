@@ -1,3 +1,6 @@
+/*
+  Generates leopard patterns to be projected during the scan
+ */
 #include <stdlib.h>
 #include <stdio.h>
 #include <omp.h>
@@ -13,7 +16,7 @@ int main(int argc, char** argv) {
     int nthreads = 4, w = 1920, h = 1080,
         nb_waves = 32, nb_shifts = 3,
         nb_patterns = 40,
-        init_seed = 1337;
+        init_seed = 1337, identify_filenames = 0;
 
     float base_freq = 0.02;
 
@@ -39,13 +42,17 @@ int main(int argc, char** argv) {
     ARG_CASE('f')
         base_freq = ARGF;
 
+    LSARG_CASE('i', "identify-filenames")
+        identify_filenames = 1;
+
     LARG_CASE("seed")
         init_seed = ARGI;
 
     WRONG_ARG
             printf("usage: %s [-t nb_threads=%d] [-w width=%d] [-h height=%d]\n"
                    "\t\t[-q nb_waves=%d] [-s nb_shifts=%d] [-n nb_patterns=%d]\n"
-                   "\t\t[-f base_freq=%f] [--seed init_seed=%d]\n", argv0,
+                   "\t\t[-f base_freq=%f] [--seed init_seed=%d]\n"
+                   "\t\t[-i|--identify-filenames]\n", argv0,
                    nthreads, w, h, nb_waves, nb_shifts, nb_patterns, base_freq, init_seed);
             exit(0);
 
@@ -109,17 +116,27 @@ int main(int argc, char** argv) {
             #pragma omp parallel for private(i, j)
             for(i=0; i < h; i++) {
                 for(j=0; j < w; j++) {
-                    intensities[shift][i][j] = image[i][j] = grey_scale_erfc(image[i][j] / sqrt(nb_waves));
+                    intensities[shift][i][j] = image[i][j] = gray_scale_erfc(image[i][j] / sqrt(nb_waves));
                 }
             }
 
             char filename[50];
-            sprintf(filename, "leo_%d_%d_%03d_%02d.pgm", w, h, n, shift);
-            save_pgm(filename, image, w, h, 8);
+            // sprintf(filename, "leo_%d_%d_%03d_%02d.pgm", w, h, n, shift);
+
+            int idx = nb_shifts * n + shift;
+
+            if(identify_filenames) {
+                // leo_width_height_nb-shifts_idx
+                sprintf(filename, "leo_%d_%d_%d_%03d.png", w, h, nb_shifts, idx);
+            } else {
+                sprintf(filename, "leo_%03d.png", idx);
+            }
+
+            save_gray_png(filename, image, w, h, 8);
         }
 
         char filename[50];
-        sprintf(filename, "phase_ref_%d_%d_%03d.pgm", w, h, n);
+        sprintf(filename, "phase_ref_%d_%d_%03d.png", w, h, n);
         save_phase(intensities, filename, nb_shifts, w, h);
 
         free_f32cube(intensities, nb_shifts);

@@ -521,7 +521,7 @@ float distance_modulo_pi(float* a, float* b, int len) {
 }
 
 // Mathematica : Table[ ToString[x] -> Round[Erfc[x]/2*256], {x, -2, 2, 0.01}]
-float grey_scale_erfc(float value) {
+float gray_scale_erfc(float value) {
     int n = roundf(value * 100);
 
     if(n <= -179)
@@ -903,9 +903,9 @@ float*** load_codes(char* phase_format, char* img_format, char numbered_imgs,
     for(int k=0; k<nb_patterns; k++) {
         sprintf(filename, phase_format, w, h, k);
 
-        // If phase has already been computed, load it from the pgm file
+        // If phase has already been computed, load it from the image file
         if(access(filename, F_OK) != -1) {
-            codes[k] = load_pgm(filename, &w, &h);
+            codes[k] = load_gray(filename, &w, &h);
 
             for(int i=0; i < h; i++) {
                 for(int j=0; j < w; j++) {
@@ -920,12 +920,13 @@ float*** load_codes(char* phase_format, char* img_format, char numbered_imgs,
             #pragma omp parallel for
             for(int shift=0; shift < nb_shifts; shift++) {
 
+                // FIXME : new image format
                 if(numbered_imgs)
                     sprintf(filename, img_format, k * nb_shifts + shift);
                 else
                     sprintf(filename, img_format, w, h, k, shift);
 
-                intensities[shift] = load_pgm(filename, &w, &h);
+                intensities[shift] = load_gray(filename, &w, &h);
 
             }
 
@@ -946,7 +947,7 @@ float*** load_codes(char* phase_format, char* img_format, char numbered_imgs,
             }
 
             sprintf(filename, phase_format, w, h, k);
-            save_pgm(filename, image, w, h, 16);
+            save_gray_png(filename, image, w, h, 16);
 
             free_f32matrix(image);
             free_f32cube(intensities, nb_shifts);
@@ -958,10 +959,10 @@ float*** load_codes(char* phase_format, char* img_format, char numbered_imgs,
 
 float** load_mask(char* img_format, int nb_patterns, int w, int h) {
 
-    char* mask_fname = "maskCam.pgm";
+    char* mask_fname = "maskCam.png";
 
     if(access(mask_fname, F_OK) != -1) {
-        return load_pgm(mask_fname, &w, &h);
+        return load_gray(mask_fname, &w, &h);
     }
 
     float** mask = malloc_f32matrix(w, h);
@@ -980,7 +981,7 @@ float** load_mask(char* img_format, int nb_patterns, int w, int h) {
         char filename[50];
         sprintf(filename, img_format, k);
 
-        float** image = load_pgm(filename, &w, &h);
+        float** image = load_gray(filename, &w, &h);
 
         #pragma omp parallel for
         for(int i=0; i < h; i++) {
@@ -1000,9 +1001,9 @@ float** load_mask(char* img_format, int nb_patterns, int w, int h) {
         }
     }
 
-    save_pgm(mask_fname, mask, w, h, 8);
-    save_pgm("camMin.pgm", mask_min, w, h, 8);
-    save_pgm("camMax.pgm", mask_max, w, h, 8);
+    save_gray_png(mask_fname, mask, w, h, 8);
+    save_gray_png("camMin.png", mask_min, w, h, 8);
+    save_gray_png("camMax.png", mask_max, w, h, 8);
 
     return mask;
 }
@@ -1048,6 +1049,9 @@ end_copy:
     return codes;
 }
 
+/*
+  Save a map (16-bits grayscale) of the phase for a set of shifted leopards
+*/
 void save_phase(float*** intensities, char* filename, int nb_shifts, int w, int h) {
     float** image = malloc_f32matrix(w, h);
 
@@ -1070,11 +1074,14 @@ void save_phase(float*** intensities, char* filename, int nb_shifts, int w, int 
         free(intensities_ij);
     }
 
-    save_pgm(filename, image, w, h, 16);
+    save_gray_png(filename, image, w, h, 16);
 
     free_f32matrix(image);
 }
 
+/**
+ * Remap an array of x/y/error to an array of 16-bit integers and save it
+ */
 void save_color_map(char* filename, float*** matches, int from_w, int from_h,
                     int to_w, int to_h, float max_distance) {
     float*** channels = malloc_f32cube(3, from_w, from_h);
@@ -1093,7 +1100,7 @@ void save_color_map(char* filename, float*** matches, int from_w, int from_h,
             }
         }
 
-    save_ppm(filename, channels, from_w, from_h, 16);
+    save_color_png(filename, channels, from_w, from_h, 16);
 
     free_f32cube(channels, 3);
 }

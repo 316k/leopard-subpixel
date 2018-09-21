@@ -1,5 +1,5 @@
 /*
-  Split a PPM image in three PGM images
+  Split an RGB image in three grayscale images
  */
 #include <stdlib.h>
 #include <stdio.h>
@@ -18,9 +18,9 @@ int main(char argc, char** argv) {
     float x = 0.0;
     float y = 0.0;
 
-    char* rname = "split-r.pgm";
-    char* gname = "split-g.pgm";
-    char* bname = "split-b.pgm";
+    char* rname = "split-r.png";
+    char* gname = "split-g.png";
+    char* bname = "split-b.png";
 
     // Args parsing
     ARGBEGIN
@@ -35,12 +35,12 @@ int main(char argc, char** argv) {
 
     WRONG_ARG
         usage:
-        printf("usage: %s [-r split-r.pgm] [-g split-g.pgm] [-b split-b.pgm] filename\n", argv0);
+        printf("usage: %s [-r %s] [-g %s] [-b %s] rgb.png\n", argv0, rname, gname, bname);
         exit(1);
 
     ARGEND
 
-    if(argc < 1) goto usage;
+    if(argc != 1) goto usage;
 
     int size;
 
@@ -53,11 +53,11 @@ int main(char argc, char** argv) {
 
     int depth = size == 65535 ? 16 : 8;
 
-    float*** in = load_ppm(argv[0], &w, &h);
+    float*** in = load_color(argv[0], &w, &h);
 
-    save_pgm(rname, in[0], w, h, depth);
-    save_pgm(gname, in[1], w, h, depth);
-    save_pgm(bname, in[2], w, h, depth);
+    save_gray_png(rname, in[0], w, h, depth);
+    save_gray_png(gname, in[1], w, h, depth);
+    save_gray_png(bname, in[2], w, h, depth);
 
     return 0;
 }

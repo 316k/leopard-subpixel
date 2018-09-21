@@ -1,5 +1,5 @@
 /*
-  Apply sub-pixel translation to a PGM image
+  Apply sub-pixel translation to a grayscale image
  */
 #include <stdlib.h>
 #include <stdio.h>
@@ -57,15 +57,16 @@ int main(int argc, char** argv) {
     WRONG_ARG
         usage:
         printf("usage: %s [-t nb_threads=%d] [-x delta_x=%f]\n"
-               "\t[-y delta_y=%f] image.pgm > out.pgm\n",
+               "\t[-y delta_y=%f] gray-in.png gray-out.pgm\n",
                argv0, nthreads, x, y);
         exit(1);
 
     ARGEND
 
-    if(argc < 1) goto usage;
+    if(argc != 2) goto usage;
 
-    float** in = load_pgm(argv[argc - 1], &w, &h);
+    float** in = load_gray(argv[0], &w, &h);
+    char* out_fname = argv[1];
 
     float** out = malloc_f32matrix(w, h);
 
@@ -79,7 +80,7 @@ int main(int argc, char** argv) {
                 + get(in, i + decalage_y, j + decalage_x, w, h) * fabs(x*y);
         }
 
-    save_pgm(NULL, out, w, h, 8);
+    save_gray_png(out_fname, out, w, h, 8);
 
     return 0;
 }
