@@ -1,5 +1,5 @@
 /*
-  "Flips" an image point-of-view according to a given LUT
+  Randomly swap pixels around a given area
 */
 #include <stdlib.h>
 #include <stdio.h>
@@ -32,14 +32,14 @@ int main(char argc, char** argv) {
 
     WRONG_ARG
         usage:
-        printf("usage: %s [-a area=%d] [-p probability=%f] img.ppm > out.ppm\n",
+        printf("usage: %s [-a area=%d] [-p probability=%f] in.png spread.png\n",
                argv0, area, probability);
         exit(1);
     ARGEND
 
     srand(time(NULL));
 
-    if(argc != 1)
+    if(argc != 2)
         goto usage;
 
     char* proj_lut_name = argv[0];
@@ -81,7 +81,7 @@ int main(char argc, char** argv) {
 
             swapped[i][j] = 1;
             swapped[new_i][new_j] = 1;
-            
+
             float tmp = out[0][new_i][new_j];
             out[0][new_i][new_j] = out[0][i][j];
             out[0][i][j] = tmp;
@@ -95,7 +95,7 @@ int main(char argc, char** argv) {
             out[2][i][j] = tmp;
         }
 
-    save_ppm(NULL, out, lut_w, lut_h, 16);
+    save_color_png(argv[1], out, lut_w, lut_h, 16);
 
     return EXIT_SUCCESS;
 }

@@ -1,4 +1,7 @@
-.all:V: join-ppm split-ppm flip-lut spread-ppm
+.all:V: join-rgb split-rgb flip-lut spread
+
+clean:V:
+    rm -f join-rgb split-rgb flip-lut spread
 
 &: &.c ../helpers.c ../args.h
 	gcc -g $stem.c -fopenmp -lm -o $stem
