@@ -298,7 +298,7 @@ int main(int argc, char** argv) {
     char* ref_phase_format = "phase_ref_%d_%d_%03d.png";
     char* cam_phase_format = "phase_cam_%d_%d_%03d.png";
 
-    char filename[50]; // Generic filename buffer
+    char filename[FNAME_MAX_LEN]; // Generic filename buffer
 
     // Args parsing
     ARGBEGIN

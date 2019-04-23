@@ -82,7 +82,7 @@ void dump_cost(
         }
     }
 
-    char debug_filename[50];
+    char debug_filename[FNAME_MAX_LEN];
     sprintf(debug_filename, "debug/%d-%d-%d", x, y, q);
     FILE *debug = fopen(debug_filename, "w");
 

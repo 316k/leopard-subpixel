@@ -896,7 +896,7 @@ float gray_scale_erfc(float value) {
 float*** load_codes(char* phase_format, char* img_format, char numbered_imgs,
                     int nb_patterns, int nb_shifts, int w, int h) {
     float*** codes = malloc_f32cube(nb_patterns, w, h);
-    char filename[50];
+    char filename[FNAME_MAX_LEN];
 
     // Compute phases
     #pragma omp parallel for private(filename)
@@ -978,7 +978,7 @@ float** load_mask(char* img_format, int nb_patterns, int w, int h) {
     #pragma omp parallel for
     for(int k=0; k<nb_patterns; k++) {
 
-        char filename[50];
+        char filename[FNAME_MAX_LEN];
         sprintf(filename, img_format, k);
 
         float** image = load_gray(filename, &w, &h);

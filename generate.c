@@ -120,7 +120,7 @@ int main(int argc, char** argv) {
                 }
             }
 
-            char filename[50];
+            char filename[FNAME_MAX_LEN];
             // sprintf(filename, "leo_%d_%d_%03d_%02d.pgm", w, h, n, shift);
 
             int idx = nb_shifts * n + shift;
@@ -135,7 +135,7 @@ int main(int argc, char** argv) {
             save_gray_png(filename, image, w, h, 8);
         }
 
-        char filename[50];
+        char filename[FNAME_MAX_LEN];
         sprintf(filename, "phase_ref_%d_%d_%03d.png", w, h, n);
         save_phase(intensities, filename, nb_shifts, w, h);
 
