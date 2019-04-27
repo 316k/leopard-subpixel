@@ -5,16 +5,15 @@
 source vars.sh
 
 
-for period_raw in $frequencies
+for period in $frequencies
 do
-    period=$(echo $period_raw | sed -r 's/\.0$//')
-    echo solve $period $period_raw
-    ../solve-phase sine_h_$w\_$h\_$period\_* phase-x-${period_raw}.png
-    ../solve-phase sine_v_$w\_$h\_$period\_* phase-y-${period_raw}.png
+    echo solve $period
+    ../../solve-phase sine-h-${period}-* phase-x-${period}.png
+    ../../solve-phase sine-v-${period}-* phase-y-${period}.png
 done
 
 
-../unwrap-phase-mps \
+../../unwrap-phase-mps \
     $(echo $frequencies | sed -r 's/([0-9.]+)/phase-x-\1.png/g') \
     $(echo $frequencies | sed -r 's/([0-9.]+)/phase-y-\1.png/g') \
     $frequencies \
