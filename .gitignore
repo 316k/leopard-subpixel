@@ -9,6 +9,7 @@ presentation.pdf
 # Binaries
 ./generate
 ./solve
+./solve-bin
 ./subpixel
 ./subpixel-grad
 ./enhance
