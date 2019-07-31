@@ -6,6 +6,7 @@ import numpy as np
 import argparse
 arg_parser = argparse.ArgumentParser()
 
+arg_parser.add_argument("seed", help="Random mask seed", type=int, default=1)
 arg_parser.add_argument("img", help="Input image")
 arg_parser.add_argument("out", help="Maksed image")
 arg_parser.add_argument("--block-size", help="Size of a cut out block", type=int, default=5)
@@ -15,6 +16,8 @@ args = arg_parser.parse_args()
 bs=args.block_size
 
 img, depth = read_img(args.img)
+
+np.random.seed(args.seed)
 
 offsets = np.random.randint(0, bs, (2,))
 
