@@ -1,5 +1,7 @@
 #include <unistd.h>
 #include <errno.h>
+#include <assert.h>
+
 #include "lodepng.c"
 
 extern int errno;
@@ -464,6 +466,8 @@ void save_color_png(char* filename, float*** image, int w, int h, int depth) {
 
 int* random_phases(int size, int total) {
 
+    assert(size <= total);
+
     int i, j, swap;
     int* list = malloc(sizeof(int) * total);
 
@@ -506,9 +510,9 @@ float solve_phase(float* intensities, int nb_shifts) {
 }
 
 float modulo_sub_pi(float x, float y) {
-    float diff = fabs(fmod(PI + x, PI) - fmod(PI + y, PI));
+    float diff = fabs(fmod(2*PI + x, 2*PI) - fmod(2*PI + y, 2*PI));
 
-    return fminf(diff, PI - diff);
+    return fminf(diff, 2*PI - diff);
 }
 
 float distance_modulo_pi(float* a, float* b, int len) {
@@ -914,10 +918,11 @@ float*** load_codes(char* phase_format, char* img_format, char numbered_imgs,
             }
         } else {
 
+            // Compute codes and save them in image file
+
             float*** intensities = malloc(sizeof(float**) * nb_shifts);
             float** image = malloc_f32matrix(w, h);
 
-            #pragma omp parallel for
             for(int shift=0; shift < nb_shifts; shift++) {
 
                 // FIXME : new image format
@@ -930,7 +935,6 @@ float*** load_codes(char* phase_format, char* img_format, char numbered_imgs,
 
             }
 
-            #pragma omp parallel for
             for(int i=0; i < h; i++) {
                 for(int j=0; j < w; j++) {
                     float* intensities_ij = malloc(sizeof(float) * nb_shifts);
@@ -940,7 +944,7 @@ float*** load_codes(char* phase_format, char* img_format, char numbered_imgs,
                     }
 
                     codes[k][i][j] = solve_phase(intensities_ij, nb_shifts);
-                    image[i][j] = (codes[k][i][j]  + PI) / (2 * PI) * 65535.0;
+                    image[i][j] = (codes[k][i][j] + PI) / (2 * PI) * 65535.0;
 
                     free(intensities_ij);
                 }
@@ -1008,47 +1012,6 @@ float** load_mask(char* img_format, int nb_patterns, int w, int h) {
     return mask;
 }
 
-float*** quadratic_codes(float*** orig_codes, int nb_patterns, int w, int h, int* new_nb_patterns) {
-
-    int nb_extended = (nb_patterns + 1) * nb_patterns / 2;
-
-    // Limit
-    if(nb_extended > 300)
-        nb_extended = 300;
-
-    *new_nb_patterns = nb_extended;
-
-    float*** codes = malloc_f32cube(nb_extended, w, h);
-
-    #pragma omp parallel for
-    for(int k=0; k < nb_patterns; k++)
-        for(int i=0; i < h; i++)
-            for(int j=0; j < w; j++)
-                codes[k][i][j] = orig_codes[k][i][j];
-
-    int k=nb_patterns;
-
-    for(int i_ref=0; i_ref < nb_patterns; i_ref++) {
-        for(int j_ref=i_ref + 1; j_ref < nb_patterns; j_ref++) {
-
-            // Difference between pixel phases : [-2pi, 2pi] /2 => [-pi, pi]
-            #pragma omp parallel for
-            for(int i=0; i < h; i++)
-                for(int j=0; j < w; j++)
-                    codes[k][i][j] = (orig_codes[i_ref][i][j] - orig_codes[j_ref][i][j]) / 2.0;
-
-            k++;
-
-            if(k == nb_extended)
-                goto end_copy;
-        }
-    }
-
-end_copy:
-
-    return codes;
-}
-
 /*
   Save a map (16-bits grayscale) of the phase for a set of shifted leopards
 */
@@ -1094,8 +1057,10 @@ void save_color_map(char* filename, float*** matches, int from_w, int from_h,
                 channels[Y][i][j] = 65535.0;
                 channels[DIST][i][j] = 65535.0;
             } else {
-                channels[X][i][j] = matches[X][i][j] * 65535.0/to_w;
-                channels[Y][i][j] = matches[Y][i][j] * 65535.0/to_h;
+                assert(matches[DIST][i][j] <= max_distance);
+                assert(matches[DIST][i][j] >= 0);
+                channels[X][i][j] = matches[X][i][j] * 65535.0/(to_w - 1);
+                channels[Y][i][j] = matches[Y][i][j] * 65535.0/(to_h - 1);
                 channels[DIST][i][j] = fmin(matches[DIST][i][j] * 65535.0/max_distance, 65535.0);
             }
         }
