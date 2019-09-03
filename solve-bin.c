@@ -12,10 +12,6 @@
 #include "args.h"
 #include "helpers.c"
 
-#define code_t mpz_t
-// #define init_code(code) code = 0;
-#define init_code(code) mpz_init(code)
-
 mpz_t** malloc_f32matrixul(int w, int h, int nb_bits) {
     mpz_t** matrix = malloc(sizeof(mpz_t*) * h);
     matrix[0] = (mpz_t*) calloc(h * w, sizeof(mpz_t));
@@ -61,9 +57,9 @@ float** mask;
 
 long time_since_start;
 
-#define HASH_TO_CODES()   hash_to_codes(to_codes, hash_table, bits_used, i, j, &nb_collisions)
+#define HASH_TO_CODES   hash_to_codes(to_codes, hash_table, bits_used, i, j, &nb_collisions)
 
-#define HASH_FROM_CODES() hash_from_codes(matches, from_codes, to_codes, \
+#define HASH_FROM_CODES hash_from_codes(matches, from_codes, to_codes, \
                                           hash_table, bits_used, i, j, \
                                           &nb_new_matches, &nb_better_matches)
 
@@ -82,21 +78,11 @@ void hash_to_codes(mpz_t** to_codes, int* hash_table[2], int* bits_used,
     size_t hash = 0;
 
     for(int k=0; k < nb_values; k++) {
-
-        /* printf("%d => %d\n", + bits_used[k], mpz_tstbit(to_codes[i][j], bits_used[k])); */
-
         // int bit = 1 << bits_used[k];
         // hash |= (!!(to_codes[i][j] & bit)) << k;
 
         hash |= mpz_tstbit(to_codes[i][j], bits_used[k]) << k;
     }
-
-    /* mpz_t qwat; */
-    /* mpz_init(qwat); */
-    /* mpz_set_ui(qwat, (unsigned long int) hash); */
-
-    /* printf("\nhash=%s\n", mpz_get_str(NULL, 2, hash)); */
-
 
     // Premier arrivé prend la place
     if(hash_table[X][hash] == -1) {
@@ -146,7 +132,6 @@ void backward_matching(float*** matches, float*** from_codes, float*** to_codes,
                        float* to_code, int from_x, int from_y,
                        int to_x, int to_y) {
 
-    return;
     float* from_code = malloc(sizeof(float) * nb_bits);
 
     for(int i=fmax(from_y - 1, 0); i < fmin(from_y + 1, from_h - 1); i++) // <= ?
@@ -181,22 +166,14 @@ void hash_from_codes(float*** matches, mpz_t** from_codes, mpz_t** to_codes,
     size_t hash = 0;
 
     for(int k=0; k < nb_values; k++) {
-        /* int bit = 1 << bits_used[k]; */
-        /* hash |= (!!(to_codes[i][j] & bit)) << k; */
 
-        hash |= mpz_tstbit(to_codes[i][j], bits_used[k]) << k;
+        hash |= mpz_tstbit(from_codes[i][j], bits_used[k]) << k;
     }
 
     // Collision = match
     if(hash_table[X][hash] != -1) {
         int x = hash_table[X][hash];
         int y = hash_table[Y][hash];
-
-        /* mpz_t from_code; */
-        /* mpz_t to_code; */
-
-        /* from_code = from_codes[i][j]; */
-        /* to_code = to_codes[y][x]; */
 
         int distance = mpz_hamdist(from_codes[i][j], to_codes[y][x]); // bitCount(from_code ^ to_code);
 
@@ -253,28 +230,28 @@ void lsh(float*** matches, mpz_t** from_codes, mpz_t** to_codes) {
         #pragma omp parallel for private(i, j)
         for(i=0; i < to_h; i++)
             for(j=0; j < to_w; j++)
-                HASH_TO_CODES();
+                HASH_TO_CODES;
         break;
 
     case 1:
         #pragma omp parallel for private(i, j)
         for(i=0; i < to_h; i++)
             for(j=to_w - 1; j >= 0; j--)
-                HASH_TO_CODES();
+                HASH_TO_CODES;
         break;
 
     case 2:
         #pragma omp parallel for private(i, j)
         for(i=to_h - 1; i >= 0; i--)
             for(j=0; j < to_w; j++)
-                HASH_TO_CODES();
+                HASH_TO_CODES;
         break;
 
     case 3:
         #pragma omp parallel for private(i, j)
         for(i=to_h - 1; i >= 0; i--)
             for(j=to_w - 1; j >= 0; j--)
-                HASH_TO_CODES();
+                HASH_TO_CODES;
         break;
     }
 
@@ -293,7 +270,7 @@ void lsh(float*** matches, mpz_t** from_codes, mpz_t** to_codes) {
         for(i=0; i < from_h; i++)
             for(j=0; j < from_w; j++)
                 if(mask_threshold == -1 || mask[i][j] > mask_threshold)
-                    HASH_FROM_CODES();
+                    HASH_FROM_CODES;
         break;
 
     case 1:
@@ -301,7 +278,7 @@ void lsh(float*** matches, mpz_t** from_codes, mpz_t** to_codes) {
         for(i=0; i < from_h; i++)
             for(j=from_w - 1; j >= 0; j--)
                 if(mask_threshold == -1 || mask[i][j] > mask_threshold)
-                    HASH_FROM_CODES();
+                    HASH_FROM_CODES;
         break;
 
     case 2:
@@ -309,7 +286,7 @@ void lsh(float*** matches, mpz_t** from_codes, mpz_t** to_codes) {
         for(i=from_h - 1; i >= 0; i--)
             for(j=0; j < from_w; j++)
                 if(mask_threshold == -1 || mask[i][j] > mask_threshold)
-                    HASH_FROM_CODES();
+                    HASH_FROM_CODES;
         break;
 
     case 3:
@@ -317,7 +294,7 @@ void lsh(float*** matches, mpz_t** from_codes, mpz_t** to_codes) {
         for(i=from_h - 1; i >= 0; i--)
             for(j=from_w - 1; j >= 0; j--)
                 if(mask_threshold == -1 || mask[i][j] > mask_threshold)
-                    HASH_FROM_CODES();
+                    HASH_FROM_CODES;
         break;
     }
 
@@ -359,6 +336,8 @@ int main(int argc, char** argv) {
     int nthreads = 4, max_iterations = 30,
         disable_heuristics = 0, proj_lut = 0, dump_all_images = 0;
 
+    int use_default_out_format = 1;
+
     int quadratic = 0;
 
     /*
@@ -373,6 +352,7 @@ int main(int argc, char** argv) {
 
     char* ref_format = "leo_%03d.png";
     char* cam_format = "%03d.png";
+    char* out_format = "lutCam%02d.png";
 
     char filename[FNAME_MAX_LEN]; // Generic filename buffer
 
@@ -385,11 +365,15 @@ int main(int argc, char** argv) {
         proj_lut = 1;
         mask_threshold = -1;
 
-    ARG_CASE('l')
+    ARG_CASE('R')
         ref_format = ARGS;
 
-    ARG_CASE('c')
+    ARG_CASE('C')
         cam_format = ARGS;
+
+    ARG_CASE('O')
+        out_format = ARGS;
+        use_default_out_format = 0;
 
     ARG_CASE('i')
         max_iterations = ARGI;
@@ -414,16 +398,17 @@ int main(int argc, char** argv) {
 
     WRONG_ARG
         printf("usage: %s [-t nb_threads=%d] [-p gen_proj_lut]\n"
-               "\t[-l ref_format=\"%s\"] [-c cam_format=\"%s\"]\n"
+               "\t[-R ref_format=\"%s\"] [-C cam_format=\"%s\"]\n"
+               "\t[-O out_format=\"%s\"]\n"
                "\t[-i max_iterations=%d] [-d (disable heuristics)]\n"
                /* "\t[-b nb_boxes=%d]" */
                "\t[-v nb_values=%d]\n"
                /* "\t[-r quantizing_range=%0.2f]\n" */
                /* "\t[-r hash_table_ratio=%f]\n" */
                "\t[-m mask_threshold=%0.2f] [--dump-all-images]\n\n"
-               "\t[-s stop_threshold=%0.2f] [--stop_threshold_nb_passes=%d]\n"
+               "\t[-s stop_threshold=%0.2f] [--stop_threshold_nb_passes=%d] (TODO)\n"
                /* "\tquantizing_range should be between 0 and 1\n" */,
-               argv0, nthreads, ref_format, cam_format, max_iterations,
+               argv0, nthreads, ref_format, cam_format, out_format, max_iterations,
                /* nb_boxes, */ nb_values, /* quantizing_range, */ /* hash_table_ratio,  */
                mask_threshold, stop_threshold, stop_threshold_nb_passes
             );
@@ -472,6 +457,9 @@ int main(int argc, char** argv) {
         char* tmp_format = ref_format;
         ref_format = cam_format;
         cam_format = tmp_format;
+
+        if(use_default_out_format)
+            out_format = "lutProj%02d.png";
 
         int tmp;
         tmp = from_w;
@@ -527,14 +515,17 @@ int main(int argc, char** argv) {
 
                     int diff = (current_image[i][j] - previous_image[i][j]) < 0;
 
-                    if(diff)
+                    if(diff) {
                         mpz_setbit(cam_codes[i][j], n);
+                    }
                 }
 
             free_f32matrix(current_image);
 
-            if(!quadratic)
+            if(!quadratic) {
+                n++;
                 break;
+            }
         }
 
         // Free last image
@@ -570,8 +561,10 @@ int main(int argc, char** argv) {
 
             free_f32matrix(current_image);
 
-            if(!quadratic)
+            if(!quadratic) {
+                n++;
                 break;
+            }
         }
 
         // Free last image
@@ -614,17 +607,17 @@ int main(int argc, char** argv) {
                     /*                      from_code, j, i, x, y); */
                     /* } */
 
-                    backward_matching(matches, cam_codes, ref_codes,
-                                      ref_codes[i][j], j, i, x, y);
+                    /* backward_matching(matches, cam_codes, ref_codes, */
+                    /*                   ref_codes[i][j], j, i, x, y); */
                 }
         }
 
         // Save the iteration
         if(dump_all_images || l == max_iterations - 1 || l % 5 == 0) {
-            if(proj_lut)
-                sprintf(filename, "lutProj%02d.png", l);
-            else
-                sprintf(filename, "lutCam%02d.png", l);
+            /* if(proj_lut) */
+            /*     sprintf(filename, "lutProj%02d.png", l); */
+            /* else */
+            sprintf(filename, out_format, l);
 
             save_color_map(filename, matches,
                            from_w, from_h, to_w, to_h, nb_bits);
