@@ -49,3 +49,9 @@ accuracy.
 
 This will generate the file `lutSubCam.ppm`, which should be your final
 image.
+
+
+## Library
+
+This code uses [lodepng](https://github.com/lvandeve/lodepng/) to read
+PNG images. All the required code is bundled here (`lodepng.*`).
