@@ -20,6 +20,9 @@ int main(int argc, char** argv) {
 
     float base_freq = 0.02;
 
+    int user_defined_band = 0;
+    float freq_min, freq_max;
+
     ARGBEGIN
         ARG_CASE('t')
         nthreads = ARGI;
@@ -48,12 +51,18 @@ int main(int argc, char** argv) {
     LARG_CASE("seed")
         init_seed = ARGI;
 
+    LARG_CASE("custom-band")
+        user_defined_band = 1;
+        freq_min = ARGF;
+        freq_max = ARGF;
+
     WRONG_ARG
             printf("usage: %s [-t nb_threads=%d] [-w width=%d] [-h height=%d]\n"
                    "\t\t[-q nb_waves=%d] [-s nb_shifts=%d] [-n nb_patterns=%d]\n"
                    "\t\t[-f base_freq=%f] [--seed init_seed=%d]\n"
-                   "\t\t[-i|--identify-filenames]\n", argv0,
-                   nthreads, w, h, nb_waves, nb_shifts, nb_patterns, base_freq, init_seed);
+                   "\t\t[--custom-band min max] [-i|--identify-filenames]\n",
+                   argv0, nthreads, w, h, nb_waves, nb_shifts, nb_patterns,
+                   base_freq, init_seed);
             exit(0);
 
     ARGEND
@@ -76,7 +85,12 @@ int main(int argc, char** argv) {
             srand(init_seed + n * 900 + i);
             phases[i] = rand()/(float)RAND_MAX * 2 * PI;
             angles[i] = rand()/(float)RAND_MAX * PI;
-            freqs[i] = base_freq * pow(2, 2 * rand()/(float)RAND_MAX - 1);
+
+            if(user_defined_band) {
+                freqs[i] = rand()/(float)RAND_MAX * (freq_max - freq_min) + freq_min;
+            } else {
+                freqs[i] = base_freq * pow(2, 2 * rand()/(float)RAND_MAX - 1);
+            }
         }
 
         float** arrays[3] = {&phases, &angles, &freqs};
