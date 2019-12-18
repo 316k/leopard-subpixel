@@ -35,7 +35,7 @@ int format_contains_percentd(char* fmt) {
 
 int main(int argc, char** argv) {
     int i, j;
-    int nthreads = 4, w = 1920, h = 1080, nb_shifts = 1;
+    int nthreads = 4, w = 1920, h = 1080, nb_shifts = 1, offset = 0;
     float period = 1000, freq = 1/period, vertical = 0;
     char* output_format = NULL;
 
@@ -63,13 +63,16 @@ int main(int argc, char** argv) {
     ARG_CASE('v')
         vertical = 1;
 
+    ARG_CASE('O')
+        offset = ARGI;
+
     ARG_CASE('o')
         output_format = ARGS;
 
     WRONG_ARG
         printf("usage: %s [-t nb_threads=%d] [-w width=%d] [-h height=%d]\n"
                "\t\t[-f frequency=%f] [-p period=%f] [-s nb_shifts=%d] [-v vertical sine]\n"
-               "\t\t[-o output_fname]\n"
+               "\t\t[-O offset=0] [-o output_fname]\n"
                "\n"
                "\nif output_format contains %%0*d, it will be used as the shift number\n"
                "\tDefault output_format is :\n"
@@ -99,7 +102,12 @@ int main(int argc, char** argv) {
                 else
                     fx = 2 * PI * freq;
 
-                image[i][j] = (int) (127.5 + 127.5 * -cosf(fy * i + fx * j + phase + PI));
+                int x = j, y = i;
+
+                x += offset;
+                y += offset;
+
+                image[i][j] = (int) (127.5 + 127.5 * -cosf(fy * y + fx * x + phase + PI));
             }
         }
 

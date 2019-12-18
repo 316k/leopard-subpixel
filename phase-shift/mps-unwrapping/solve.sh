@@ -13,7 +13,7 @@ do
 done
 
 
-../../unwrap-phase-mps \
+../../unwrap-phase-mps -O $offset \
     $(echo $frequencies | sed -r 's/([0-9.]+)/phase-x-\1.png/g') \
     $(echo $frequencies | sed -r 's/([0-9.]+)/phase-y-\1.png/g') \
     $frequencies \

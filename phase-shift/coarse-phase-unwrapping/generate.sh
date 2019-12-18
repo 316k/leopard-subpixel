@@ -5,12 +5,12 @@
 source vars.sh
 
 # Lowest freq
-../../sines -p $w -s $s -w $w -h $h
-../../sines -p $h -s $s -w $w -h $h -v
+../../sines -O $offset -p $lowperiod -s $s -w $w -h $h
+../../sines -O $offset -p $lowperiod -s $s -w $w -h $h -v
 
 # Highest freq
-../../sines -p $highperiod -s $s -w $w -h $h
-../../sines -p $highperiod -s $s -w $w -h $h -v
+../../sines -O $offset -p $highperiod -s $s -w $w -h $h
+../../sines -O $offset -p $highperiod -s $s -w $w -h $h -v
 
 # Mess it up with noise
 for sin in sine_*.png

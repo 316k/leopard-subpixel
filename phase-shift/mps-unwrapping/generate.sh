@@ -1,14 +1,14 @@
 #!/bin/bash
 
-(cd .. ; mk)
+(cd ../.. ; mk)
 
 source vars.sh
 
 for period in $frequencies
 do
     echo $period
-    ../../sines -p $period -s $s -w $w -h $h -o "sine-h-${period}-%03d.png"
-    ../../sines -p $period -s $s -w $w -h $h -v -o "sine-v-${period}-%03d.png"
+    ../../sines -O $offset -p $period -s $s -w $w -h $h -o "sine-h-${period}-%03d.png"
+    ../../sines -O $offset -p $period -s $s -w $w -h $h -v -o "sine-v-${period}-%03d.png"
 done
 
 # Mess it up with noise

@@ -3,7 +3,7 @@
 
   Unwraps high-frequencies phases using an unambiguous (but with poor
   precision) low-frequency reference
-  
+
   Input 16bits high/low freq phase-maps, outputs the LUT
 */
 #include <stdlib.h>
@@ -41,7 +41,7 @@ float avg_around(float** phasemap, int x, int y, int w, int h) {
 
 int main(int argc, char** argv) {
 
-    int nthreads = 4, high_period = 10;
+    int nthreads = 4, high_period = 10, offset = 0;
 
     // Args parsing
     ARGBEGIN
@@ -52,6 +52,9 @@ int main(int argc, char** argv) {
     ARG_CASE('h')
         high_period = ARGI;
 
+    ARG_CASE('O')
+        offset = ARGI;
+
     ARG_CASE('n')
         fprintf(stderr, "***correct-with-neighbourhood not implemented yet\n");
         correct_with_neighbourhood = ARGI;
@@ -59,9 +62,9 @@ int main(int argc, char** argv) {
     WRONG_ARG
         usage:
         printf("usage: %s [-t nthreads=%d] [-h high_period (pixels)=%d]\n"
-               "\t[-n correct-with-neighbourhood=%d]\n"
+               "\t[-n correct-with-neighbourhood=%d] [-O offset=%d]\n"
                "\tlow-x.png low-y.png high-x.png high-y.png lut.png\n",
-               argv0, nthreads, high_period, correct_with_neighbourhood);
+               argv0, nthreads, high_period, correct_with_neighbourhood, offset);
         exit(1);
 
     ARGEND
@@ -99,9 +102,9 @@ int main(int argc, char** argv) {
             // TODO : use correct_with_neighbourhood to fix the fine
             // fringe according to what makes the most sense in the
             // neigbourhood
-            
-            lut[X][i][j] = chop((fringenum_x + fine_x) * high_period, 0, w);
-            lut[Y][i][j] = chop((fringenum_y + fine_y) * high_period, 0, h);
+
+            lut[X][i][j] = chop((fringenum_x + fine_x) * high_period - offset, 0, w - 1);
+            lut[Y][i][j] = chop((fringenum_y + fine_y) * high_period - offset, 0, h - 1);
             lut[DIST][i][j] = 0;
         }
     }

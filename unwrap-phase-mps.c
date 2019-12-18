@@ -21,7 +21,7 @@ float chop(float x, float low, float high) {
 
 int main(int argc, char** argv) {
 
-    int nthreads = 4;
+    int nthreads = 4, offset = 0;
 
     // Args parsing
     ARGBEGIN
@@ -29,11 +29,14 @@ int main(int argc, char** argv) {
     ARG_CASE('t')
         nthreads = ARGI;
 
+    ARG_CASE('O')
+        offset = ARGI;
+
     WRONG_ARG
         usage:
-        printf("usage: %s [-t nthreads=%d]\n"
+        printf("usage: %s [-t nthreads=%d] [-O offset=%d]\n"
                "\thighest-x.png ... lowest-x.png highest-y.png ... lowest-y.png lowest-period ... highest-period lut.png\n",
-               argv0, nthreads);
+               argv0, nthreads, offset);
         exit(1);
 
     ARGEND
@@ -94,9 +97,9 @@ int main(int argc, char** argv) {
                 lut[DIST][i][j] = 0;
             }
         }
-        char filename[FNAME_MAX_LEN];
-        sprintf(filename, "phases-%d.png", k);
-        save_color_map(filename, lut, w, h, w, h, 1);
+        /* char filename[FNAME_MAX_LEN]; */
+        /* sprintf(filename, "phases-%d.png", k); */
+        /* save_color_map(filename, lut, w, h, w, h, 1); */
     }
 
     for(int i=0; i<h; i++) {
@@ -105,8 +108,8 @@ int main(int argc, char** argv) {
             float unwrapped_x = phases_x[0][i][j];
             float unwrapped_y = phases_y[0][i][j];
 
-            lut[X][i][j] = chop(unwrapped_x / frequencies[0], 0, w);
-            lut[Y][i][j] = chop(unwrapped_y / frequencies[0], 0, h);
+            lut[X][i][j] = chop(unwrapped_x / frequencies[0] - offset, 0, w - 1);
+            lut[Y][i][j] = chop(unwrapped_y / frequencies[0] - offset, 0, h - 1);
             lut[DIST][i][j] = 0;
         }
     }
