@@ -57,7 +57,7 @@ int main(int argc, char** argv) {
     WRONG_ARG
         usage:
         printf("usage: %s [-t nb_threads=%d] [-x delta_x=%f]\n"
-               "\t[-y delta_y=%f] gray-in.png gray-out.pgm\n",
+               "\t[-y delta_y=%f] gray-in.png gray-out.png\n",
                argv0, nthreads, x, y);
         exit(1);
 
