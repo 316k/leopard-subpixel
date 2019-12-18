@@ -1,7 +1,7 @@
-.all:V: join-rgb split-rgb flip-lut spread
+.all:V: join-rgb split-rgb flip-lut spread randomize-gray
 
 clean:V:
-    rm -f join-rgb split-rgb flip-lut spread
+    rm -f join-rgb split-rgb flip-lut spread randomize-gray
 
 &: &.c ../helpers.c ../args.h
 	gcc -g $stem.c -fopenmp -lm -o $stem
