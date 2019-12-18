@@ -15,14 +15,19 @@
 int main(int argc, char** argv) {
 
     int nthreads = 4, i, j, k, w, h;
+    int xy_at_once = 0;
 
     // Args parsing
     ARGBEGIN
     ARG_CASE('t')
         nthreads = ARGI;
+
+    LARG_CASE("xy")
+        xy_at_once = 1;
+
     WRONG_ARG
         usage:
-        printf("usage: %s [-t nb_threads=%d] lut.png\n",
+        printf("usage: %s [-t nb_threads=%d] [--xy xy at once] lut.png\n",
                argv0, nthreads);
     exit(1);
 
@@ -45,13 +50,24 @@ int main(int argc, char** argv) {
             }
         }
 
-    for(k=0; k<2; k++) {
+    if(xy_at_once) {
 
         for(i=0; i<h; i++)
             for(j=0; j<w; j++) {
-                printf("%c %d %d %s\n", k == 0 ? 'X' : 'Y', k == 0 ? j : i,
-                       (int) matches[k][i][j], (k == 0 ? j : i) == (int) matches[k][i][j] ? "yes" : "no");
+                printf("%d %d %s\n", j, i, fabs(j - matches[0][i][j]) <= 1 && fabs(i - matches[1][i][j]) <= 1 ? "yes" : "no");
             }
+
+    } else {
+        for(k=0; k<2; k++) {
+
+            for(i=0; i<h; i++)
+                for(j=0; j<w; j++) {
+                    printf("%c %d %d %s\n", k == 0 ? 'X' : 'Y', k == 0 ? j : i,
+                           (int) matches[k][i][j], (k == 0 ? j : i) == (int) matches[k][i][j] ? "yes" : "no");
+                }
+
+        }
+
     }
 
     return 0;
