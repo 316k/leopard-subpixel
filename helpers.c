@@ -1,6 +1,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <assert.h>
+#include <stdint.h>
 
 #include "lodepng.c"
 
@@ -10,7 +11,9 @@ extern int errno;
 #define Y 1
 #define DIST 2
 
-#define FNAME_MAX_LEN 50
+#define FNAME_MAX_LEN 255
+
+#define SQUARE(a) ((a) * (a))
 
 const float PI = 2 * atan2(1, 0);
 
@@ -38,11 +41,31 @@ void free_f32matrix(float** image) {
     free(image);
 }
 
-float*** malloc_f32cube(int w, int h, int k) {
-    float*** cube = malloc(sizeof(float**) * w);
+uint16_t** malloc_uint16matrix(int dim2, int dim1) {
+    uint16_t** image = (uint16_t**) malloc(sizeof(uint16_t*) * dim1);
+    assert(image != NULL);
 
-    for(int i=0; i<w; i++) {
-        cube[i] = malloc_f32matrix(h, k);
+    image[0] = (uint16_t*) calloc(dim1 * dim2, sizeof(uint16_t));
+    assert(image[0] != NULL);
+
+    for(int i=0; i < dim1; i++) {
+        image[i] = (uint16_t*) (*image + dim2 * i);
+    }
+
+    return image;
+}
+
+void free_uint16matrix(uint16_t** image) {
+    free(image[0]);
+    free(image);
+}
+
+// TODO : (w, h, k)  is a bad convention
+float*** malloc_f32cube(int dim1, int dim3, int dim2) {
+    float*** cube = malloc(sizeof(float**) * dim1);
+
+    for(int i=0; i<dim1; i++) {
+        cube[i] = malloc_f32matrix(dim3, dim2);
     }
 
     return cube;
@@ -959,6 +982,321 @@ float*** load_codes(char* phase_format, char* img_format, char numbered_imgs,
     }
 
     return codes;
+}
+
+#ifdef __GMP_H__
+mpz_t** malloc_mpz_matrix(int w, int h, int nb_bits) {
+    mpz_t** matrix = malloc(sizeof(mpz_t*) * h);
+    matrix[0] = (mpz_t*) calloc(h * w, sizeof(mpz_t));
+
+    for(int i=0; i < h; i++) {
+        matrix[i] = (*matrix + w * i);
+
+        for(int j=0; j<w; j++) {
+            mpz_init2(matrix[i][j], nb_bits);
+        }
+    }
+
+    return matrix;
+}
+
+void free_mpz_matrix(mpz_t** matrix) {
+    free(matrix[0]);
+    free(matrix);
+}
+
+mpz_t** load_binary_codesq(char* format, int width, int height, int nb_patterns) {
+
+    char filename[FNAME_MAX_LEN];
+    int w, h;
+    int nb_bits = nb_patterns * (nb_patterns - 1) / 2;
+
+    float*** codes = malloc_f32cube(height, nb_bits, width);
+    mpz_t** bits = malloc_mpz_matrix(width, height, nb_bits);
+
+    int nb_copies = nb_patterns - 1;
+    int copy_start = 0;
+
+    // Camera binary codes
+    for(int k=0; k<nb_patterns; k++) {
+
+        // Load first cam image
+        sprintf(filename, format, k);
+        float** img = load_gray(filename, &w, &h);
+
+        assert(w == width && h == height);
+
+        // Copy image values
+        for(int i=0; i<height; i++)
+            for(int j=0; j<width; j++) {
+                for(int n=0; n<nb_copies; n++) {
+                    // printf("copy k=%d to %d\n", k, copy_start + n);
+                    codes[i][j][copy_start + n] = -img[i][j] / 255.0;
+                }
+            }
+
+        // Sub to the previously copied value
+        for(int i=0; i<height; i++)
+            for(int j=0; j<width; j++) {
+                int idx = k - 1;
+                int jumps = nb_patterns - 2;
+
+                for(int n=0; n<k; n++) {
+                    // printf("sub k=%d to %d\n", k, idx);
+                    codes[i][j][idx] += img[i][j] / 255.0;
+
+                    idx += jumps;
+                    jumps--;
+                }
+            }
+
+        copy_start += nb_copies;
+        nb_copies--;
+    }
+
+    for(int i=0; i<height; i++)
+        for(int j=0; j<width; j++) {
+            for(int k=0; k<nb_bits; k++) {
+                int diff = codes[i][j][k] < 0;
+
+                if(diff) {
+                    mpz_setbit(bits[i][j], k);
+                }
+            }
+        }
+
+    free_f32cube(codes, height);
+
+    return bits;
+}
+
+/**
+ * Load linear binary codes from images
+ */
+mpz_t** load_binary_codesl(char* format,
+                           int width, int height, int nb_patterns) {
+
+    mpz_t** codes = malloc_mpz_matrix(width, height, nb_patterns - 1);
+
+    char filename[FNAME_MAX_LEN];
+
+    int w, h;
+
+    // Load first cam image
+    float** previous_image;
+
+    sprintf(filename, format, 0);
+    previous_image = load_gray(filename, &w, &h);
+
+    assert(w == width && h == height);
+
+    // Camera binary codes
+    for(int k=0; k<nb_patterns - 1; k++) {
+
+        float** current_image;
+
+        // Load next image
+        sprintf(filename, format, k + 1);
+        current_image = load_gray(filename, &w, &h);
+
+        assert(w == width && h == height);
+
+        for(int i=0; i<height; i++)
+            for(int j=0; j<width; j++) {
+
+                int diff = (current_image[i][j] - previous_image[i][j]) < 0;
+
+                if(diff) {
+                    mpz_setbit(codes[i][j], k);
+                }
+            }
+
+        free_f32matrix(previous_image);
+        previous_image = current_image;
+    }
+
+    // Free last image
+    free_f32matrix(previous_image);
+
+    return codes;
+}
+#endif
+
+/**
+ * Compute the continuous cost between a camera and reference code.
+ *
+ * See Eq (9) of Subpixel Unsynchronized Unstructured Light, Chaima El
+ * Asmi, Sébastien Roy
+ */
+float pixel_cost(float* cam_code, float* ref_code, int nb_bits) {
+
+    float dot_product = 0;
+    float norm_cam = 0;
+    float norm_ref = 0;
+
+    for(int k=0; k<nb_bits; k++) {
+        dot_product += ref_code[k] * cam_code[k];
+        norm_cam += SQUARE(cam_code[k]);
+        norm_ref += SQUARE(ref_code[k]);
+    }
+
+    norm_cam = sqrt(norm_cam);
+    norm_ref = sqrt(norm_ref);
+
+    if(!(fabs(norm_cam - 1) < 1e-6 ||
+         fabs(norm_cam - 1) > 1e-6 ||
+         fabs(norm_ref - 1) > 1e-6 ||
+         fabs(norm_ref - 1) < 1e-6)) {
+        printf("*** WARNING: norm should be one, but is %f %f\n", norm_cam, norm_ref);
+    }
+
+    return 1 - dot_product; // / (norm_ref * norm_cam);
+}
+
+float code_avg(float* code, int nb_bits) {
+    float avg = 0;
+    for(int i=0; i<nb_bits; i++) {
+        avg += code[i] / nb_bits;
+    }
+    return avg;
+}
+
+float code_norm(float* code, int nb_bits) {
+    float norm = 0;
+    for(int i=0; i<nb_bits; i++) {
+        norm += SQUARE(code[i]);
+    }
+    return sqrt(norm);
+}
+
+void normalize_codes(float*** codes, int w, int h, int nb_bits) {
+    // Normalize to codes
+    for(int i=0; i<h; i++)
+        for(int j=0; j<w; j++) {
+            float avg = code_avg(codes[i][j], nb_bits);
+
+            for(int n=0; n<nb_bits; n++) {
+                codes[i][j][n] -= avg;
+            }
+
+            float norm = code_norm(codes[i][j], nb_bits);
+
+            for(int n=0; n<nb_bits; n++) {
+                codes[i][j][n] /= norm;
+            }
+
+            if(!(fabs(code_norm(codes[i][j], nb_bits) - 1) < 1e-6 ||
+                 fabs(code_norm(codes[i][j], nb_bits) - 1) > 1e-6)) {
+                printf("*** WARNING: norm should be one, but is %f\n", code_norm(codes[i][j], nb_bits));
+
+                // assert(fabs(code_norm(codes[i][j], nb_bits) - 1) < 1e-6);
+            }
+        }
+}
+
+float*** load_continuous_codesq(char* format, int width, int height, int nb_patterns) {
+
+    char filename[FNAME_MAX_LEN];
+    int w, h;
+    int nb_bits = nb_patterns * (nb_patterns - 1) / 2;
+
+    float*** codes = malloc_f32cube(height, nb_bits, width);
+
+    int nb_copies = nb_patterns - 1;
+    int copy_start = 0;
+
+    // Camera binary codes
+    for(int k=0; k<nb_patterns; k++) {
+
+        // Load first cam image
+        sprintf(filename, format, k);
+        float** img = load_gray(filename, &w, &h);
+
+        /* printf("k=%d; img[0][0] == %f\n", k, img[0][0] / 255.0); */
+
+        assert(w == width && h == height);
+
+        // Copy image values
+        for(int i=0; i<height; i++)
+            for(int j=0; j<width; j++) {
+                for(int n=0; n<nb_copies; n++) {
+                    // printf("copy k=%d to %d\n", k, copy_start + n);
+                    codes[i][j][copy_start + n] = -img[i][j] / 255.0;
+                }
+            }
+
+        // Sub to the previously copied value
+        for(int i=0; i<height; i++)
+            for(int j=0; j<width; j++) {
+                int idx = k - 1;
+                int jumps = nb_patterns - 2;
+
+                for(int n=0; n<k; n++) {
+                    // printf("sub k=%d to %d\n", k, idx);
+                    codes[i][j][idx] += img[i][j] / 255.0;
+
+                    idx += jumps;
+                    jumps--;
+                }
+            }
+
+        copy_start += nb_copies;
+        nb_copies--;
+    }
+
+    normalize_codes(codes, width, height, nb_bits);
+
+    return codes;
+}
+
+void load_continuous_codes(float*** codes, char* format,
+                           int width, int height, int nb_patterns,
+                           int quadratic) {
+    char filename[FNAME_MAX_LEN];
+    int w, h, n=0;
+
+    // Camera binary codes
+    for(int k=0; k<nb_patterns - 1; k++) {
+
+        // Load first cam image
+        float** previous_image;
+
+        sprintf(filename, format, k);
+        previous_image = load_gray(filename, &w, &h);
+
+        assert(w == width && h == height);
+
+        float** current_image;
+
+        // Load next images
+        for(int l=k + 1; l<nb_patterns; l++, n++) {
+
+            sprintf(filename, format, l);
+            current_image = load_gray(filename, &w, &h);
+
+            assert(w == width && h == height);
+
+            for(int i=0; i<height; i++)
+                for(int j=0; j<width; j++) {
+
+                    float diff = current_image[i][j] / 255.0 - previous_image[i][j] / 255.0;
+
+                    codes[i][j][n] = diff;
+                }
+
+            free_f32matrix(current_image);
+
+            if(!quadratic) {
+                n++;
+                break;
+            }
+        }
+
+        // Free last image
+        free_f32matrix(previous_image);
+    }
+
+    normalize_codes(codes, width, height, n);
 }
 
 float** load_mask(char* img_format, int nb_patterns, int w, int h) {

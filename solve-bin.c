@@ -12,28 +12,6 @@
 #include "args.h"
 #include "helpers.c"
 
-mpz_t** malloc_f32matrixul(int w, int h, int nb_bits) {
-    mpz_t** matrix = malloc(sizeof(mpz_t*) * h);
-    matrix[0] = (mpz_t*) calloc(h * w, sizeof(mpz_t));
-
-    for(int i=0; i < h; i++) {
-        matrix[i] = (*matrix + w * i);
-
-        for(int j=0; j<w; j++) {
-            mpz_init2(matrix[i][j], nb_bits);
-        }
-    }
-
-    return matrix;
-}
-
-
-void free_f32matrixul(mpz_t** matrix) {
-    free(matrix[0]);
-    free(matrix);
-}
-
-
 // --- Global variables ---
 // Input-related parameters
 int nb_patterns, from_w, from_h, to_w, to_h, skip = 1, nb_bits;
@@ -63,24 +41,11 @@ long time_since_start;
                                           hash_table, bits_used, i, j, \
                                           &nb_new_matches, &nb_better_matches)
 
-int bitCount(unsigned long n) {
-    n = ((0xaaaaaaaaaaaaaaaaL & n) >>  1) + (0x5555555555555555L & n);
-    n = ((0xccccccccccccccccL & n) >>  2) + (0x3333333333333333L & n);
-    n = ((0xf0f0f0f0f0f0f0f0L & n) >>  4) + (0x0f0f0f0f0f0f0f0fL & n);
-    n = ((0xff00ff00ff00ff00L & n) >>  8) + (0x00ff00ff00ff00ffL & n);
-    n = ((0xffff0000ffff0000L & n) >> 16) + (0x0000ffff0000ffffL & n);
-    n = ((0xffffffff00000000L & n) >> 32) + (0x00000000ffffffffL & n);
-    return (int) n;
-}
-
 void hash_to_codes(mpz_t** to_codes, int* hash_table[2], int* bits_used,
                    int i, int j, int* nb_collisions) {
     size_t hash = 0;
 
     for(int k=0; k < nb_values; k++) {
-        // int bit = 1 << bits_used[k];
-        // hash |= (!!(to_codes[i][j] & bit)) << k;
-
         hash |= mpz_tstbit(to_codes[i][j], bits_used[k]) << k;
     }
 
@@ -93,70 +58,465 @@ void hash_to_codes(mpz_t** to_codes, int* hash_table[2], int* bits_used,
     }
 }
 
-/**
- * Attempts to improve an existing match by comparing the neighborhood of
- * the matched *to* pixel with the matched *from* pixel
- */
-void forward_matching(float*** matches, float*** from_codes, float*** to_codes,
-                      float* from_code, int from_x, int from_y, int to_x, int to_y) {
+int spatial_propagation2(float*** matches, mpz_t** from_codes, mpz_t** to_codes) {
 
-    float* to_code = malloc(sizeof(float) * nb_bits);
+    int nb_better_matches = 0;
 
-    for(int i=fmax(to_y - 1, 0); i < fmin(to_y + 1, to_h - 1); i++) // <= ?
-        for(int j=fmax(to_x - 1, 0); j < fmin(to_x + 1, to_w - 1); j++) {
+    for(int iteration=0; iteration<2; iteration++) {
 
-            for(int k=0; k < nb_bits; k++) {
-                to_code[k] = to_codes[k][i][j];
-            }
+        int delta = iteration * 2 - 1; // -1 or +1
 
-            float distance = distance_modulo_pi(from_code, to_code, nb_bits);
+        int i_start = 0, i_end = from_h - 1, i_inc = +1;
+        int j_start = 0, j_end = from_w - 1, j_inc = +1;
 
-            // When new distance is lower, update the match
-            if(distance < matches[DIST][from_y][from_x]) {
-                matches[X][from_y][from_x]    = j;
-                matches[Y][from_y][from_x]    = i;
-                matches[DIST][from_y][from_x] = distance;
+        if(iteration == 0) {
+            i_start = from_h - 1;
+            i_end = 0;
+            i_inc = -1;
 
-                assert(matches[DIST][from_y][from_x] > 0);
-            }
+            j_start = from_w - 1;
+            j_end = 0;
+            j_inc = -1;
         }
 
-    free(to_code);
+        for(int i=i_start; i != i_end; i += i_inc)
+            for(int j=j_start; j != j_end; j += j_inc) {
+
+                // Skip thresholded pixels
+                if(mask_threshold != -1 && mask[i][j] <= mask_threshold)
+                    continue;
+
+                // Process current
+                int match_x = matches[X][i][j];
+
+                // Don't try to propagate unassigned pixels
+                if(match_x == -1)
+                    continue;
+
+                int match_y = matches[Y][i][j];
+                // float current_cost = matches[DIST][i][j];
+
+                // Don't propagate outside the images
+                if(!(j + delta < from_w && match_x + delta < to_w &&
+                     j + delta >= 0 && match_x + delta >= 0 &&
+                     i + delta < from_h && match_y + delta < to_h &&
+                     i + delta >= 0 && match_y + delta >= 0)) {
+                    continue;
+                }
+
+                // Propagate horizontally
+                if(mask_threshold == -1 || mask[i][j + delta] > mask_threshold) {
+
+                    // Cost of copying Current <-> Neighbor
+                    int copy_cost = mpz_hamdist(
+                        from_codes[i][j],
+                        to_codes[match_y][match_x + delta]);
+
+                    // Cost of propagating Neighbor <-> Neighbor
+                    int propagation_cost = mpz_hamdist(
+                        from_codes[i][j + delta],
+                        to_codes[match_y][match_x + delta]);
+
+                    int to_x = match_x + delta;
+                    int to_y = match_y;
+                    int to_cost = propagation_cost;
+
+                    // Choose best of copy/propagation
+                    if(copy_cost < propagation_cost) {
+                        to_x = match_x;
+                        to_cost = copy_cost;
+                    }
+
+                    // Current match cost
+                    float prev_neighbour_cost = matches[DIST][i][j + delta];
+
+                    // If the neighbor is unmatched or is already
+                    // matched with a higher cost, replace it
+                    if(prev_neighbour_cost == -1.0 || to_cost < prev_neighbour_cost) {
+                        nb_better_matches++;
+
+                        matches[X][i][j + delta] = to_x;
+                        matches[Y][i][j + delta] = to_y;
+                        matches[DIST][i][j + delta] = to_cost;
+                    }
+
+                    // FIXME : probablement pas nécessaire, ça va se faire à une étape ultérieure anyway
+                    // OU... Possiblement utile, puisqu'on a déjà les données en mémoire, ça évite un calcul?
+                    /* // Possibly update actual match */
+                    /* if(copy_cost < current_cost) { */
+                    /*     matches[X][i][j] = match_x + delta; */
+                    /*     matches[Y][i][j] = match_y; */
+                    /*     matches[DIST][i][j] = copy_cost; */
+                    /*     current_cost = copy_cost; */
+                    /* } */
+                }
+
+                // Propagate vertically
+                if(mask_threshold == -1 || mask[i + delta][j] > mask_threshold) {
+
+                    // Match by copying Current <-> Neighbor
+                    int copy_cost = mpz_hamdist(
+                        from_codes[i][j],
+                        to_codes[match_y + delta][match_x]);
+
+                    // Match by propagating Neighbor <-> Neighbor
+                    int propagation_cost = mpz_hamdist(
+                        from_codes[i + delta][j],
+                        to_codes[match_y + delta][match_x]);
+
+                    int to_x = match_x;
+                    int to_y = match_y + delta;
+                    int to_cost = propagation_cost;
+
+                    // Choose best of copy/propagation
+                    if(copy_cost < propagation_cost) {
+                        to_y = match_y;
+                        to_cost = copy_cost;
+                    }
+
+                    // Current match cost
+                    float prev_neighbour_cost = matches[DIST][i + delta][j];
+
+                    // If the neighbor is unmatched or is already
+                    // matched with a higher cost, replace it
+                    if(prev_neighbour_cost == -1.0 || to_cost < prev_neighbour_cost) {
+                        nb_better_matches++;
+
+                        matches[X][i + delta][j] = to_x;
+                        matches[Y][i + delta][j] = to_y;
+                        matches[DIST][i + delta][j] = to_cost;
+                    }
+
+                    // FIXME : probablement pas nécessaire, ça va se faire à une étape ultérieure anyway
+                    // OU... Possiblement utile, puisqu'on a déjà les données en mémoire, ça évite un calcul?
+                    /* // Possibly update actual match */
+                    /* if(copy_cost < current_cost) { */
+                    /*     matches[X][i][j] = match_x; */
+                    /*     matches[Y][i][j] = match_y + delta; */
+                    /*     matches[DIST][i][j] = copy_cost; */
+                    /* } */
+                }
+            }
+    }
+    printf("%d\n", nb_better_matches);
+    return nb_better_matches;
 }
 
-/**
- * Attempts to create new matches by looking in the neighborhood of
- * the matched *from* pixel
- */
-void backward_matching(float*** matches, float*** from_codes, float*** to_codes,
-                       float* to_code, int from_x, int from_y,
-                       int to_x, int to_y) {
+int spatial_propagation(float*** matches, mpz_t** from_codes, mpz_t** to_codes) {
 
-    float* from_code = malloc(sizeof(float) * nb_bits);
+    int nb_better_matches = 0;
 
-    for(int i=fmax(from_y - 1, 0); i < fmin(from_y + 1, from_h - 1); i++) // <= ?
-        for(int j=fmax(from_x - 1, 0); j < fmin(from_x + 1, from_w - 1); j++) {
+    for(int iteration=0; iteration<2; iteration++) {
 
-            // Skip {current pixel -> current match}
-            if(i == from_y && j == from_x)
-                continue;
+        int delta = iteration * 2 - 1; // -1 or +1
 
-            for(int k=0; k < nb_bits; k++) {
-                from_code[k] = from_codes[k][i][j];
-            }
+        int i_start = 0, i_end = from_h - 1, i_inc = +1;
+        int j_start = 0, j_end = from_w - 1, j_inc = +1;
 
-            float distance = distance_modulo_pi(from_code, to_code, nb_bits);
+        if(iteration == 0) {
+            i_start = from_h - 1;
+            i_end = 0;
+            i_inc = -1;
 
-            // When it's a new match or new distance is lower, update the match
-            if(matches[DIST][i][j] == -1.0 || distance < matches[DIST][i][j]) {
-                matches[X][i][j]    = to_x;
-                matches[Y][i][j]    = to_y;
-                matches[DIST][i][i] = distance;
-                assert(matches[DIST][from_y][from_x] > 0);
-            }
+            j_start = from_w - 1;
+            j_end = 0;
+            j_inc = -1;
         }
 
-    free(from_code);
+        for(int i=i_start; i != i_end; i += i_inc)
+            for(int j=j_start; j != j_end; j += j_inc) {
+
+                // Skip thresholded pixels
+                if(mask_threshold != -1 && mask[i][j] <= mask_threshold)
+                    continue;
+
+                // Process current
+                int match_x = matches[X][i][j];
+
+                // Don't try to propagate unassigned pixels
+                if(match_x == -1)
+                    continue;
+
+                int match_y = matches[Y][i][j];
+                // float current_cost = matches[DIST][i][j];
+
+                // Don't propagate outside the images
+                if(!(j + delta < from_w && match_x + delta < to_w &&
+                     j + delta >= 0 && match_x + delta >= 0 &&
+                     i + delta < from_h && match_y + delta < to_h &&
+                     i + delta >= 0 && match_y + delta >= 0)) {
+                    continue;
+                }
+
+                // Propagate horizontally
+                if(mask_threshold == -1 || mask[i][j + delta] > mask_threshold) {
+
+                    // Cost of copying Neighbor <-> Current
+                    int copy_cost = mpz_hamdist(
+                        from_codes[i][j + delta],
+                        to_codes[match_y][match_x]);
+
+                    // Cost of propagating Neighbor <-> Neighbor
+                    int propagation_cost = mpz_hamdist(
+                        from_codes[i][j + delta],
+                        to_codes[match_y][match_x + delta]);
+
+                    int to_x = match_x + delta;
+                    int to_y = match_y;
+                    int to_cost = propagation_cost;
+
+                    // Choose best of copy/propagation
+                    if(copy_cost < propagation_cost) {
+                        to_x = match_x;
+                        to_cost = copy_cost;
+                    }
+
+                    // Current match cost
+                    float prev_neighbour_cost = matches[DIST][i][j + delta];
+
+                    // If the neighbor is unmatched or is already
+                    // matched with a higher cost, replace it
+                    if(prev_neighbour_cost == -1.0 || to_cost < prev_neighbour_cost) {
+                        nb_better_matches++;
+
+                        matches[X][i][j + delta] = to_x;
+                        matches[Y][i][j + delta] = to_y;
+                        matches[DIST][i][j + delta] = to_cost;
+                    }
+
+                    // FIXME : probablement pas nécessaire, ça va se faire à une étape ultérieure anyway
+                    // OU... Possiblement utile, puisqu'on a déjà les données en mémoire, ça évite un calcul?
+                    /* // Possibly update actual match */
+                    /* if(copy_cost < current_cost) { */
+                    /*     matches[X][i][j] = match_x + delta; */
+                    /*     matches[Y][i][j] = match_y; */
+                    /*     matches[DIST][i][j] = copy_cost; */
+                    /*     current_cost = copy_cost; */
+                    /* } */
+                }
+
+                // Propagate vertically
+                if(mask_threshold == -1 || mask[i + delta][j] > mask_threshold) {
+
+                    // Match by copying Neighbor <-> Current
+                    int copy_cost = mpz_hamdist(
+                        from_codes[i + delta][j],
+                        to_codes[match_y][match_x]);
+
+                    // Match by propagating Neighbor <-> Neighbor
+                    int propagation_cost = mpz_hamdist(
+                        from_codes[i + delta][j],
+                        to_codes[match_y + delta][match_x]);
+
+                    int to_x = match_x;
+                    int to_y = match_y + delta;
+                    int to_cost = propagation_cost;
+
+                    // Choose best of copy/propagation
+                    if(copy_cost < propagation_cost) {
+                        to_y = match_y;
+                        to_cost = copy_cost;
+                    }
+
+                    // Current match cost
+                    float prev_neighbour_cost = matches[DIST][i + delta][j];
+
+                    // If the neighbor is unmatched or is already
+                    // matched with a higher cost, replace it
+                    if(prev_neighbour_cost == -1.0 || to_cost < prev_neighbour_cost) {
+                        nb_better_matches++;
+
+                        matches[X][i + delta][j] = to_x;
+                        matches[Y][i + delta][j] = to_y;
+                        matches[DIST][i + delta][j] = to_cost;
+                    }
+
+                    // FIXME : probablement pas nécessaire, ça va se faire à une étape ultérieure anyway
+                    // OU... Possiblement utile, puisqu'on a déjà les données en mémoire, ça évite un calcul?
+                    /* // Possibly update actual match */
+                    /* if(copy_cost < current_cost) { */
+                    /*     matches[X][i][j] = match_x; */
+                    /*     matches[Y][i][j] = match_y + delta; */
+                    /*     matches[DIST][i][j] = copy_cost; */
+                    /* } */
+                }
+            }
+    }
+    printf("%d\n", nb_better_matches);
+    return nb_better_matches;
+}
+
+int cont_spatial_propagation(float*** matches, float*** from_codes, float*** to_codes) {
+
+    int nb_better_matches = 0;
+
+    for(int iteration=0; iteration<2; iteration++) {
+
+        int delta = iteration * 2 - 1; // -1 or +1
+
+        int i_start = 0, i_end = from_h - 1, i_inc = +1;
+        int j_start = 0, j_end = from_w - 1, j_inc = +1;
+
+        if(iteration == 0) {
+            i_start = from_h - 1;
+            i_end = 0;
+            i_inc = -1;
+
+            j_start = from_w - 1;
+            j_end = 0;
+            j_inc = -1;
+        }
+
+        for(int i=i_start; i != i_end; i += i_inc)
+            for(int j=j_start; j != j_end; j += j_inc) {
+
+                // Skip thresholded pixels
+                if(mask_threshold != -1 && mask[i][j] <= mask_threshold)
+                    continue;
+
+                // Process current
+                int match_x = matches[X][i][j];
+
+                // Don't try to propagate unassigned pixels
+                if(match_x == -1)
+                    continue;
+
+                int match_y = matches[Y][i][j];
+                // float current_cost = matches[DIST][i][j];
+
+                // Don't propagate outside the images
+                if(!(j + delta < from_w && match_x + delta < to_w &&
+                     j + delta >= 0 && match_x + delta >= 0 &&
+                     i + delta < from_h && match_y + delta < to_h &&
+                     i + delta >= 0 && match_y + delta >= 0)) {
+                    continue;
+                }
+
+                // Propagate horizontally
+                if(mask_threshold == -1 || mask[i][j + delta] > mask_threshold) {
+
+                    // Match by copying Neighbor <-> Current
+                    float copy_cost = pixel_cost(
+                        from_codes[i][j + delta],
+                        to_codes[match_y][match_x],
+                        nb_bits);
+
+                    // Match by propagating Neighbor <-> Neighbor
+                    float propagation_cost = pixel_cost(
+                        from_codes[i][j + delta],
+                        to_codes[match_y][match_x + delta],
+                        nb_bits);
+
+                    int to_x = match_x + delta;
+                    int to_y = match_y;
+                    float to_cost = propagation_cost;
+
+                    // Choose best of copy/propagation
+                    if(copy_cost < propagation_cost) {
+                        to_x = match_x;
+                        to_cost = copy_cost;
+                    }
+
+                    int neighbor_match_x = (int) matches[X][i][j + delta];
+                    int neighbor_match_y = (int) matches[Y][i][j + delta];
+
+                    // Current match cost pour le voisin
+                    /* float prev_neighbour_cost = matches[DIST][i][j + delta]; // TODO : wrong */
+                    // Old neighbor match cost
+                    float prev_neighbour_cost = -1;
+
+                    if(neighbor_match_x != -1) {
+                        prev_neighbour_cost = pixel_cost(
+                            from_codes[i][j + delta],
+                            to_codes[neighbor_match_y][neighbor_match_x],
+                            nb_bits);
+                    }
+
+                    // If the neighbor is unmatched or is already
+                    // matched with a higher cost, replace it
+                    if(neighbor_match_x == -1 || to_cost < prev_neighbour_cost) {
+                        nb_better_matches++;
+
+                        matches[X][i][j + delta] = to_x;
+                        matches[Y][i][j + delta] = to_y;
+                        matches[DIST][i][j + delta] = nb_bits - 1; /* to_cost; */ // FIXME
+                    }
+
+                    // FIXME : probablement pas nécessaire, ça va se faire à une étape ultérieure anyway
+                    // OU... Possiblement utile, puisqu'on a déjà les données en mémoire, ça évite un calcul?
+                    /* // Possibly update actual match */
+                    /* if(copy_cost < current_cost) { */
+                    /*     matches[X][i][j] = match_x + delta; */
+                    /*     matches[Y][i][j] = match_y; */
+                    /*     matches[DIST][i][j] = copy_cost; */
+                    /*     current_cost = copy_cost; */
+                    /* } */
+                }
+
+                // Propagate vertically
+                if(mask_threshold == -1 || mask[i + delta][j] > mask_threshold) {
+
+                    // Match by copying Neighbor <-> Current
+                    float copy_cost = pixel_cost(
+                        from_codes[i + delta][j],
+                        to_codes[match_y][match_x],
+                        nb_bits);
+
+                    // Match by propagating Neighbor <-> Neighbor
+                    float propagation_cost = pixel_cost(
+                        from_codes[i + delta][j],
+                        to_codes[match_y + delta][match_x],
+                        nb_bits);
+
+                    int to_x = match_x;
+                    int to_y = match_y + delta;
+                    float to_cost = propagation_cost;
+
+                    // Choose best of copy/propagation
+                    if(copy_cost < propagation_cost) {
+                        to_y = match_y;
+                        to_cost = copy_cost;
+                    }
+
+                    int neighbor_match_x = (int) matches[X][i + delta][j];
+                    int neighbor_match_y = (int) matches[Y][i + delta][j];
+
+                    // Current match cost pour le voisin
+                    /* float prev_neighbour_cost = matches[DIST][i][j + delta]; // TODO : wrong */
+                    // Old neighbor match cost
+                    float prev_neighbour_cost = -1;
+
+                    if(neighbor_match_y != -1) {
+                        prev_neighbour_cost = pixel_cost(
+                            from_codes[i + delta][j],
+                            to_codes[neighbor_match_y][neighbor_match_x],
+                            nb_bits);
+                    }
+
+                    // If the neighbor is unmatched or is already
+                    // matched with a higher cost, replace it
+                    if(neighbor_match_y == -1 || to_cost < prev_neighbour_cost) {
+
+                        nb_better_matches++;
+
+                        matches[X][i + delta][j] = to_x;
+                        matches[Y][i + delta][j] = to_y;
+                        matches[DIST][i + delta][j] = nb_bits - 1; /* to_cost; */ // FIXME
+                    }
+
+                    // FIXME : probablement pas nécessaire, ça va se faire à une étape ultérieure anyway
+                    // OU... Possiblement utile, puisqu'on a déjà les données en mémoire, ça évite un calcul?
+                    /* // Possibly update actual match */
+                    /* if(copy_cost < current_cost) { */
+                    /*     matches[X][i][j] = match_x; */
+                    /*     matches[Y][i][j] = match_y + delta; */
+                    /*     matches[DIST][i][j] = copy_cost; */
+                    /* } */
+                }
+            }
+    }
+    printf("Continuous spatial better matches : %d\n", nb_better_matches);
+    return nb_better_matches;
 }
 
 void hash_from_codes(float*** matches, mpz_t** from_codes, mpz_t** to_codes,
@@ -168,6 +528,7 @@ void hash_from_codes(float*** matches, mpz_t** from_codes, mpz_t** to_codes,
     for(int k=0; k < nb_values; k++) {
 
         hash |= mpz_tstbit(from_codes[i][j], bits_used[k]) << k;
+
     }
 
     // Collision = match
@@ -175,7 +536,7 @@ void hash_from_codes(float*** matches, mpz_t** from_codes, mpz_t** to_codes,
         int x = hash_table[X][hash];
         int y = hash_table[Y][hash];
 
-        int distance = mpz_hamdist(from_codes[i][j], to_codes[y][x]); // bitCount(from_code ^ to_code);
+        int distance = mpz_hamdist(from_codes[i][j], to_codes[y][x]);
 
         // Si la nouvelle distance est plus petite, on update le match
         if(matches[DIST][i][j] == -1.0 || distance < matches[DIST][i][j]) {
@@ -298,29 +659,6 @@ void lsh(float*** matches, mpz_t** from_codes, mpz_t** to_codes) {
         break;
     }
 
-    /* // Dump hash-table profile */
-    /* int idx = 0, count = 0, empty_run = hash_table[X][i] == -1; */
-    /* int nb_empty_spaces = 0; */
-
-    /* for(i=1; i<=hash_table_size; i++) { */
-    /*     if(i == hash_table_size || ( */
-    /*            // Whenever the run type changes */
-    /*            empty_run ? (hash_table[X][i] != -1) : (hash_table[X][i] == -1) */
-    /*            )) { */
-    /*         printf("%s %08d -> %04d\n", empty_run ? "[ ]" : "[x]", idx, count); */
-    /*         // Reset run settings */
-    /*         empty_run = hash_table[X][i] == -1; */
-    /*         count = 0; */
-    /*         idx = i; */
-    /*     } else { */
-    /*         count++; */
-    /*     } */
-
-    /*     nb_empty_spaces += (hash_table[X][i] == -1); */
-    /* } */
-
-    /* printf("nb_empty_spaces=%d\n", nb_empty_spaces); */
-
     free(hash_table[0]);
     free(hash_table[1]);
     free(bits_used);
@@ -331,10 +669,12 @@ void lsh(float*** matches, mpz_t** from_codes, mpz_t** to_codes) {
 
 int main(int argc, char** argv) {
 
-    int i, j, k, l, n;
+    int i, j, k, l;
 
     int nthreads = 4, max_iterations = 30,
         disable_heuristics = 0, proj_lut = 0, dump_all_images = 0;
+
+    int max_heuristic_iterations = 5, use_cont_heuristic = 0;
 
     int use_default_out_format = 1;
 
@@ -396,6 +736,9 @@ int main(int argc, char** argv) {
     LARG_CASE("dump-all-images")
         dump_all_images = 1;
 
+    LARG_CASE("use-cont-heuristic")
+        use_cont_heuristic = 1;
+
     WRONG_ARG
         printf("usage: %s [-t nb_threads=%d] [-p gen_proj_lut]\n"
                "\t[-R ref_format=\"%s\"] [-C cam_format=\"%s\"]\n"
@@ -419,7 +762,6 @@ int main(int argc, char** argv) {
     omp_set_num_threads(nthreads);
 
     srand(time(NULL));
-
 
     // Check file size to avoid problems if sines.txt is empty
     FILE* info = fopen("sines.txt", "r");
@@ -481,102 +823,28 @@ int main(int argc, char** argv) {
 
     nb_bits = nb_patterns - 1;
 
-    if(quadratic)
+    mpz_t** cam_codes;
+    mpz_t** ref_codes;
+
+    if(quadratic) {
         nb_bits = nb_patterns * (nb_patterns - 1) / 2;
 
-    mpz_t** cam_codes = malloc_f32matrixul(from_w, from_h, nb_bits);
-    mpz_t** ref_codes = malloc_f32matrixul(to_w, to_h, nb_bits);
+        printf("Loading cam binary codes\n");
+        cam_codes = load_binary_codesq(cam_format, from_w, from_h, nb_patterns);
 
-    int w, h;
+        printf("Loading ref binary codes\n");
+        ref_codes = load_binary_codesq(ref_format, to_w, to_h, nb_patterns);
+    } else {
+        printf("Loading cam binary codes\n");
+        cam_codes = load_binary_codesl(cam_format, from_w, from_h, nb_patterns);
 
-    // --- Load binary codes ---
-
-    printf("Loading cam binary codes\n");
-
-    // Camera binary codes
-    for(k=0, n=0; k<nb_patterns - 1; k++) {
-
-        // Load first cam image
-        float** previous_image;
-
-        sprintf(filename, cam_format, k);
-        previous_image = load_gray(filename, &w, &h);
-
-        float** current_image;
-
-        // Load next images
-        for(l=k + 1; l<nb_patterns; l++, n++) {
-
-            sprintf(filename, cam_format, l);
-            current_image = load_gray(filename, &w, &h);
-
-            for(i=0; i<from_h; i++)
-                for(j=0; j<from_w; j++) {
-
-                    int diff = (current_image[i][j] - previous_image[i][j]) < 0;
-
-                    if(diff) {
-                        mpz_setbit(cam_codes[i][j], n);
-                    }
-                }
-
-            free_f32matrix(current_image);
-
-            if(!quadratic) {
-                n++;
-                break;
-            }
-        }
-
-        // Free last image
-        free_f32matrix(previous_image);
-    }
-
-    // Ref binary codes
-    printf("Loading ref binary codes\n");
-    for(k=0, n=0; k<nb_patterns - 1; k++) {
-
-        // Load first cam image
-        float** previous_image;
-
-        sprintf(filename, ref_format, k);
-        previous_image = load_gray(filename, &w, &h);
-
-        float** current_image;
-
-        // Load next images
-        for(l=k + 1; l<nb_patterns; l++, n++) {
-
-            sprintf(filename, ref_format, l);
-            current_image = load_gray(filename, &w, &h);
-
-            for(i=0; i<from_h; i++)
-                for(j=0; j<from_w; j++) {
-
-                    int diff = (current_image[i][j] - previous_image[i][j]) < 0;
-
-                    if(diff)
-                        mpz_setbit(ref_codes[i][j], n);
-                }
-
-            free_f32matrix(current_image);
-
-            if(!quadratic) {
-                n++;
-                break;
-            }
-        }
-
-        // Free last image
-        free_f32matrix(previous_image);
+        printf("Loading ref binary codes\n");
+        ref_codes = load_binary_codesl(ref_format, to_w, to_h, nb_patterns);
     }
 
     if(mask_threshold != -1) {
         mask = load_mask(proj_lut ? ref_format : cam_format, nb_patterns, from_w, from_h);
     }
-
-    /* mpz_t from_code; */
-    /* mpz_t to_code; */
 
     time_since_start = time(NULL);
 
@@ -584,39 +852,8 @@ int main(int argc, char** argv) {
         printf("----- Iteration %02d -----\n", l);
         lsh(matches, cam_codes, ref_codes);
 
-        // Launch heuristics
-        disable_heuristics = 1;
-        if(!disable_heuristics && l % 5 == 0 && l != 0) {
-            printf("----- Running backward & forward matching -----\n");
-
-            #pragma omp parallel for private(i, j, k)
-            for(i=0; i<from_h; i++)
-                for(j=0; j<from_w; j++) {
-
-                    if(matches[DIST][i][j] == -1)
-                        continue;
-
-                    /* from_code = cam_codes[i][j]; */
-                    /* to_code = ref_codes[i][j]; */
-
-                    int x = matches[X][i][j];
-                    int y = matches[Y][i][j];
-
-                    /* if(mask_threshold == -1 || mask[i][j] > mask_threshold) { */
-                    /*     forward_matching(matches, cam_codes, ref_codes, */
-                    /*                      from_code, j, i, x, y); */
-                    /* } */
-
-                    /* backward_matching(matches, cam_codes, ref_codes, */
-                    /*                   ref_codes[i][j], j, i, x, y); */
-                }
-        }
-
         // Save the iteration
-        if(dump_all_images || l == max_iterations - 1 || l % 5 == 0) {
-            /* if(proj_lut) */
-            /*     sprintf(filename, "lutProj%02d.png", l); */
-            /* else */
+        if(dump_all_images) {
             sprintf(filename, out_format, l);
 
             save_color_map(filename, matches,
@@ -625,6 +862,68 @@ int main(int argc, char** argv) {
 
         printf("delta time = %ld\n", time(NULL) - time_since_start);
     }
+
+    if(!disable_heuristics) {
+
+        save_color_map("lutCam-no-heuristic.png", matches,
+                       from_w, from_h, to_w, to_h, nb_bits);
+
+        // Spatial propagation heuristic with binary codes
+        for(int iteration=0; iteration<max_heuristic_iterations; iteration++) {
+            int nb_better = 1;
+
+            nb_better = spatial_propagation(matches, cam_codes, ref_codes);
+
+            // Save the iteration
+            if(dump_all_images || nb_better == 0 || iteration == max_heuristic_iterations - 1) {
+                sprintf(filename, "lutCam%02d-bin-flood.png", iteration);
+
+                save_color_map(filename, matches,
+                               from_w, from_h, to_w, to_h, nb_bits);
+            }
+
+            printf("delta time = %ld\n", time(NULL) - time_since_start);
+
+            if(nb_better == 0)
+                break;
+        }
+
+        // TODO : second batch of heuristics with float code instead
+        free_mpz_matrix(cam_codes);
+        free_mpz_matrix(ref_codes);
+
+        if(use_cont_heuristic) {
+            assert(quadratic);
+
+            printf("Loading cam continuous codes\n");
+            float*** cont_cam_codes = load_continuous_codesq(cam_format, from_w, from_h, nb_patterns);
+            printf("Loading ref continuous codes\n");
+            float*** cont_ref_codes = load_continuous_codesq(ref_format, to_w, to_h, nb_patterns);
+
+            for(int iteration=0; iteration<max_heuristic_iterations; iteration++) {
+                int nb_better = 1;
+
+                nb_better = cont_spatial_propagation(matches, cont_cam_codes, cont_ref_codes);
+
+                // Save the iteration
+                if(dump_all_images || nb_better == 0 || iteration == max_heuristic_iterations - 1) {
+                    sprintf(filename, "lutCam%02d-cont-flood.png", iteration);
+
+                    save_color_map(filename, matches,
+                                   from_w, from_h, to_w, to_h, nb_bits);
+                }
+
+                printf("delta time = %ld\n", time(NULL) - time_since_start);
+
+                if(nb_better == 0)
+                    break;
+            }
+        }
+    }
+
+    save_color_map(
+        proj_lut ? "lutProjPixel.png" : "lutCamPixel.png",
+        matches, from_w, from_h, to_w, to_h, nb_bits);
 
     return EXIT_SUCCESS;
 }
