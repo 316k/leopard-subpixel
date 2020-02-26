@@ -501,7 +501,7 @@ int main(int argc, char** argv) {
 
                     if(find_intersections(bi - ai, ci - ai, di - ai, zi - ai,
                                           bj - aj, cj - aj, dj - aj, zj - aj, &sols)) {
-                        
+
                         // printf("%d %d => %f %f %f %f\n", dim_a, dim_b, sols.dx1, sols.dy1, sols.dx2, sols.dy2);
 
                         /* printf("%f = %f\n", billy(sols.dx1, sols.dy1, ai, bi, ci, di), zi); */
@@ -520,7 +520,7 @@ int main(int argc, char** argv) {
 
                             float cost = subpixel_cost(sols.dx1, sols.dy1,
                                                        cam_codes[current_y][current_x],
-                                                       
+
                                                        ref_codes[current_match_y][current_match_x],
                                                        ref_codes[current_match_y][current_match_x + 1],
                                                        ref_codes[current_match_y + 1][current_match_x],
@@ -596,7 +596,7 @@ int main(int argc, char** argv) {
                 // Écrit la valeur de la carte sous-pixel
                 subpix_matches[X][i][j] = best_subpix_x;
                 subpix_matches[Y][i][j] = best_subpix_y;
-                /* subpix_matches[DIST][i][j] = newcost; */
+                subpix_matches[DIST][i][j] = newcost;
             }
         }
     }
@@ -632,7 +632,7 @@ int main(int argc, char** argv) {
     // Write subpixel-precise LUT
     save_color_map(
         output_fname,
-        subpix_matches, from_w, from_h, to_w, to_h, nb_bits);
+        subpix_matches, from_w, from_h, to_w, to_h, PI);
 
     return EXIT_SUCCESS;
 }
