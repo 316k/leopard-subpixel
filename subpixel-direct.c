@@ -1,3 +1,7 @@
+/*
+  Compute a subpixel-accurate LUT from a pixel-accurate LUT and
+  preprocessed dimensions
+*/
 #include <stdlib.h>
 #include <stdio.h>
 #include <omp.h>
@@ -125,9 +129,75 @@ int find_intersections(
     return 1;
 }
 
+// Gradient descent parameters
+float step_decrease_rate = 0.8;
+int max_iters = 100;
+
+// Gradient descent constants
+const float epsilon = 0.001;
+float precision = 1e-4;
+
+int biggest_iter_reached = 0, max_iters_reached = 0, nb_gradient_descents = 0;
+
+/**
+ * Find subpixel through a gradient descent
+ */
+int gradient_descent_solution(float* m, float* a, float* b, float* c, float* d,
+                              float* dx, float* dy) {
+    nb_gradient_descents++;
+
+    float previous_step_size = INFINITY;
+
+    int iter = 0;
+    float step = 1;
+
+    float x = 0.5, y = 0.5;
+
+    for(iter=0; previous_step_size > precision && iter < max_iters; iter++) {
+
+        // For the pixel to stay in the borders
+        x = fmax(fmin(x, 1), 0);
+        y = fmax(fmin(y, 1), 0);
+
+        /* if(x < 0 || y < 0 || x > 1 || y > 1) { */
+        /*     x = rand()/(float)RAND_MAX; */
+        /*     y = rand()/(float)RAND_MAX; */
+        /*     break; */
+        /* } */
+
+        float current_cost = subpixel_cost(x, y, m, a, b, c, d);
+        float grad_x = (subpixel_cost(x + epsilon, y, m, a, b, c, d) - current_cost) / epsilon;
+        float grad_y = (subpixel_cost(x, y + epsilon, m, a, b, c, d) - current_cost) / epsilon;
+
+        float prev_x = x, prev_y = y;
+
+        // Decrease speed over time to prevent loops or going
+        // too far away from starting point
+        step *= step_decrease_rate;
+
+        x -= fmax(fmin(step * grad_x, 0.25), -0.25);
+        y -= fmax(fmin(step * grad_y, 0.25), -0.25);
+
+        previous_step_size = fmax(fabs(prev_x - x), fabs(SQUARE(prev_y - y)));
+    }
+
+    biggest_iter_reached = fmax(biggest_iter_reached, iter);
+
+    if(iter == max_iters) {
+        max_iters_reached++;
+    }
+
+    *dx = x;
+    *dy = y;
+
+    return 1;
+}
+
 int main(int argc, char** argv) {
 
     int nthreads = 4, quadratic = 0;
+    int disable_gradient_descent = 0;
+    int verbose = 1;
 
     char* ref_format = "leo_%03d.png";
     char* cam_format = "%03d.png";
@@ -171,13 +241,19 @@ int main(int argc, char** argv) {
 
     ARG_CASE('n')
         n_best_dimensions = ARGI;
+
+    LARG_CASE("skip-discontinuities")
+
+        disable_gradient_descent = 1;
+
     WRONG_ARG
         printf("usage: %s [-t nb_threads=%d]\n"
                "\t[-O output=%s] [-L lut=%s]\n"
                "\t[-R ref_format=\"%s\"] [-C cam_format=\"%s\"]\n"
                "\t[-D dump-prefix=\"%s\"]\n"
                "\t[-p|--preprocessed-data=\"%s\"] [-q quadratic]\n"
-               "\t[-n number of dimensions to use=%d]\n",
+               "\t[-n number of dimensions to use=%d]\n"
+               "\t[--skip-discontinuities]\n",
                argv0, nthreads, output_fname, lut_fname,
                ref_format, cam_format, dump_prefix, preproc_fname, (int) n_best_dimensions);
         exit(1);
@@ -249,11 +325,12 @@ int main(int argc, char** argv) {
             } else {
                 matches[X][i][j] = round(matches[X][i][j] / 65535.0 * (to_w - 1));
                 matches[Y][i][j] = round(matches[Y][i][j] / 65535.0 * (to_h - 1));
-                matches[DIST][i][j] = matches[DIST][i][j] / 65535.0 * (nb_bits);
+                matches[DIST][i][j] = PI; // matches[DIST][i][j] / 65535.0 * (nb_bits);
             }
         }
 
     float*** subpix_matches = malloc_f32cube(3, from_w, from_h);
+    float*** discontinuity_map = malloc_f32cube(3, from_w, from_h);
 
     // Fill with pixel matches
     #pragma omp parallel for
@@ -292,10 +369,25 @@ int main(int argc, char** argv) {
     fclose(fp);
 
     printf("Computing subpixel LUT...\n");
+
+    int progress_bar_increment = from_h / 50;
+
+    if(verbose && progress_bar_increment) {
+        // Progress-bar
+        for(int i=0; i<from_h; i += progress_bar_increment) {
+            fprintf(stderr, ".");
+        }
+        fprintf(stderr, "\n");
+    }
+
     long last = time(NULL);
 
     #pragma omp parallel for
     for(int i=0; i<from_h; i++) {
+
+        if(verbose && progress_bar_increment && i % progress_bar_increment == 0)
+            fprintf(stderr, ".");
+
         for(int j=0; j<from_w; j++) {
 
             int match_x = (int) matches[X][i][j];
@@ -307,6 +399,7 @@ int main(int argc, char** argv) {
                cost == -1 ||
                i == 0 || i == from_h - 1 ||
                j == 0 || j == from_w - 1 ||
+               // Match sur la bordure
                match_x == 0 || match_x >= to_w - 1 ||
                match_y == 0 || match_y >= to_h - 1) {
                 /* subpix_matches[X][i][j] = match_x; */
@@ -434,15 +527,17 @@ int main(int argc, char** argv) {
             /* if(i >= 10) */
             /*     exit(-1); */
 
-            float best_subpix_x = 0;
-            float best_subpix_y = 0;
+            float best_subpix_x = match_x;
+            float best_subpix_y = match_y;
+            int is_best_discontinuity = 0;
+            int best_quadrant = 0;
             float newcost = INFINITY;
 
             // Match complet (pixel et sous-pixel)
             float* solutions_x = (float*) malloc(sizeof(float) * n_best_dimensions * 2 * 4);
             float* solutions_y = (float*) malloc(sizeof(float) * n_best_dimensions * 2 * 4);
+            // int is_discontinuity[] = {0, 0, 0, 0};
             size_t nb_solutions = 0;
-
 
             // quadrant = 0, 1, 2, 3
             //=> (x,y) = (-1,-1 ; +1,-1 ; -1,+1 ; +1,+1)
@@ -450,6 +545,55 @@ int main(int argc, char** argv) {
 
                 int current_x = j, current_y = i;
                 int current_match_x = match_x, current_match_y = match_y;
+
+                int delta_x = quadrant % 2 == 0 ? -1 : +1;
+                int delta_y = quadrant < 2 ? -1 : +1;
+
+                // Is this quadrant representing a discontinuity?
+                int match_ax = matches[X][i][j],
+                    match_bx = matches[X][i][j + delta_x],
+                    match_cx = matches[X][i + delta_y][j],
+                    match_dx = matches[X][i + delta_y][j + delta_x],
+                    match_ay = matches[Y][i][j],
+                    match_by = matches[Y][i][j + delta_x],
+                    match_cy = matches[Y][i + delta_y][j],
+                    match_dy = matches[Y][i + delta_y][j + delta_x];
+
+                int max_distance_x = fmax4(match_ax, match_bx, match_cx, match_dx)
+                    - fmin4(match_ax, match_bx, match_cx, match_dx);
+                int max_distance_y = fmax4(match_ay, match_by, match_cy, match_dy)
+                    - fmin4(match_ay, match_by, match_cy, match_dy);
+
+                if(max_distance_x > 1 || max_distance_y > 1) {
+                    if(!disable_gradient_descent) {
+                        // Yup, discontinuity
+                        // is_discontinuity[quadrant] = 1;
+
+                        // Solution par descente de gradient (ordonner a,b,c,d correctement selon delta_{x,y})
+                        float dx, dy;
+
+                        float* m = cam_codes[i][j];
+                        float* a = ref_codes[match_ay][match_ax];
+                        float* b = ref_codes[match_by][match_bx];
+                        float* c = ref_codes[match_cy][match_cx];
+                        float* d = ref_codes[match_dy][match_dx];
+
+                        gradient_descent_solution(m, a, b, c, d, &dx, &dy);
+
+                        nb_solutions++;
+
+                        best_subpix_x = current_match_x + dx * delta_x;
+                        best_subpix_y = current_match_y + dy * delta_y;
+                        is_best_discontinuity = 1;
+                        best_quadrant = quadrant;
+                        newcost = subpixel_cost(dx, dy, m, a, b, c, d);
+                    }
+
+                    continue;
+                }
+
+
+                // Else: it's smooth here
 
                 if(quadrant < 2)
                     current_match_y--;
@@ -532,6 +676,8 @@ int main(int argc, char** argv) {
                             if(cost < newcost) {
                                 best_subpix_x = current_match_x + sols.dx1;
                                 best_subpix_y = current_match_y + sols.dy1;
+                                is_best_discontinuity = 0;
+                                best_quadrant = quadrant;
                                 newcost = cost;
                             }
                         }
@@ -559,6 +705,8 @@ int main(int argc, char** argv) {
                             if(cost < newcost) {
                                 best_subpix_x = current_match_x + sols.dx2;
                                 best_subpix_y = current_match_y + sols.dy2;
+                                is_best_discontinuity = 0;
+                                best_quadrant = quadrant;
                                 newcost = cost;
                             }
                         }
@@ -597,9 +745,16 @@ int main(int argc, char** argv) {
                 subpix_matches[X][i][j] = best_subpix_x;
                 subpix_matches[Y][i][j] = best_subpix_y;
                 subpix_matches[DIST][i][j] = newcost;
+
+                discontinuity_map[X][i][j] = is_best_discontinuity * 255;
+                discontinuity_map[Y][i][j] = is_best_discontinuity * (best_quadrant / 4.0 * 255);
+                discontinuity_map[DIST][i][j] = 0;
             }
         }
     }
+
+    if(verbose)
+        putchar('\n');
 
     printf("time: %ld\n", time(NULL) - last);
 
@@ -628,6 +783,16 @@ int main(int argc, char** argv) {
     }
 
     fclose(fdebug);
+
+    save_color_png("discontinuities.png", discontinuity_map, from_w, from_h, 8);
+
+    if(verbose) {
+        printf("Gradient descent:\n"
+               "\tbiggest iteration reached: %d\n"
+               "\tmax iteration reached %d times\n"
+               "\t(%d gradient descents total)\n",
+               biggest_iter_reached, max_iters_reached, nb_gradient_descents);
+    }
 
     // Write subpixel-precise LUT
     save_color_map(
