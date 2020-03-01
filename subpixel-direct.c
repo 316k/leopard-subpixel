@@ -197,7 +197,9 @@ int main(int argc, char** argv) {
 
     int nthreads = 4, quadratic = 0;
     int disable_gradient_descent = 0;
-    int verbose = 1;
+    int force_billy_at_disc = 0, force_gradient = 0;
+    int verbose = 0;
+    int discontinuity_threshold = 1;
 
     char* ref_format = "leo_%03d.png";
     char* cam_format = "%03d.png";
@@ -221,6 +223,9 @@ int main(int argc, char** argv) {
     ARG_CASE('f')
         lut_fname = ARGS;
 
+    ARG_CASE('v')
+        verbose = 1;
+
     ARG_CASE('R')
         ref_format = ARGS;
 
@@ -242,9 +247,17 @@ int main(int argc, char** argv) {
     ARG_CASE('n')
         n_best_dimensions = ARGI;
 
-    LARG_CASE("skip-discontinuities")
+    LARG_CASE("discontinuity-threshold")
+        discontinuity_threshold = ARGI;
 
+    LARG_CASE("skip-discontinuities")
         disable_gradient_descent = 1;
+
+    LARG_CASE("force-discontinuities")
+        force_billy_at_disc = 1;
+
+    LARG_CASE("force-gradient")
+        force_gradient = 1;
 
     WRONG_ARG
         printf("usage: %s [-t nb_threads=%d]\n"
@@ -539,57 +552,70 @@ int main(int argc, char** argv) {
             // int is_discontinuity[] = {0, 0, 0, 0};
             size_t nb_solutions = 0;
 
-            // quadrant = 0, 1, 2, 3
-            //=> (x,y) = (-1,-1 ; +1,-1 ; -1,+1 ; +1,+1)
+            // quadrant =      0           1         2            3
+            //=> (x,y) = (   -1,-1   ;   +1,-1  ;   -1,+1   ;   +1,+1   )
+            //              red  '\     pink /' ; yellow _/ ; white \_
             for(int quadrant=0; quadrant<4; quadrant++) {
 
                 int current_x = j, current_y = i;
                 int current_match_x = match_x, current_match_y = match_y;
 
-                int delta_x = quadrant % 2 == 0 ? -1 : +1;
-                int delta_y = quadrant < 2 ? -1 : +1;
+                if(!force_billy_at_disc || force_gradient) {
+                    int delta_x = quadrant % 2 == 0 ? -1 : +1;
+                    int delta_y = quadrant < 2 ? -1 : +1;
 
-                // Is this quadrant representing a discontinuity?
-                int match_ax = matches[X][i][j],
-                    match_bx = matches[X][i][j + delta_x],
-                    match_cx = matches[X][i + delta_y][j],
-                    match_dx = matches[X][i + delta_y][j + delta_x],
-                    match_ay = matches[Y][i][j],
-                    match_by = matches[Y][i][j + delta_x],
-                    match_cy = matches[Y][i + delta_y][j],
-                    match_dy = matches[Y][i + delta_y][j + delta_x];
+                    int neighbour_unmatched =
+                        matches[DIST][i][j] == -1 ||
+                        matches[DIST][i][j + delta_x] == -1 ||
+                        matches[DIST][i + delta_y][j] == -1 ||
+                        matches[DIST][i + delta_y][j + delta_x] == -1;
 
-                int max_distance_x = fmax4(match_ax, match_bx, match_cx, match_dx)
-                    - fmin4(match_ax, match_bx, match_cx, match_dx);
-                int max_distance_y = fmax4(match_ay, match_by, match_cy, match_dy)
-                    - fmin4(match_ay, match_by, match_cy, match_dy);
-
-                if(max_distance_x > 1 || max_distance_y > 1) {
-                    if(!disable_gradient_descent) {
-                        // Yup, discontinuity
-                        // is_discontinuity[quadrant] = 1;
-
-                        // Solution par descente de gradient (ordonner a,b,c,d correctement selon delta_{x,y})
-                        float dx, dy;
-
-                        float* m = cam_codes[i][j];
-                        float* a = ref_codes[match_ay][match_ax];
-                        float* b = ref_codes[match_by][match_bx];
-                        float* c = ref_codes[match_cy][match_cx];
-                        float* d = ref_codes[match_dy][match_dx];
-
-                        gradient_descent_solution(m, a, b, c, d, &dx, &dy);
-
-                        nb_solutions++;
-
-                        best_subpix_x = current_match_x + dx * delta_x;
-                        best_subpix_y = current_match_y + dy * delta_y;
-                        is_best_discontinuity = 1;
-                        best_quadrant = quadrant;
-                        newcost = subpixel_cost(dx, dy, m, a, b, c, d);
+                    if(neighbour_unmatched) {
+                        continue;
                     }
 
-                    continue;
+                    // Is this quadrant representing a discontinuity?
+                    int match_ax = matches[X][i][j],
+                        match_bx = matches[X][i][j + delta_x],
+                        match_cx = matches[X][i + delta_y][j],
+                        match_dx = matches[X][i + delta_y][j + delta_x],
+                        match_ay = matches[Y][i][j],
+                        match_by = matches[Y][i][j + delta_x],
+                        match_cy = matches[Y][i + delta_y][j],
+                        match_dy = matches[Y][i + delta_y][j + delta_x];
+
+                    int max_distance_x = fmax4(match_ax, match_bx, match_cx, match_dx)
+                        - fmin4(match_ax, match_bx, match_cx, match_dx);
+                    int max_distance_y = fmax4(match_ay, match_by, match_cy, match_dy)
+                        - fmin4(match_ay, match_by, match_cy, match_dy);
+
+                    if(max_distance_x > discontinuity_threshold || max_distance_y > discontinuity_threshold || force_gradient) {
+                        if(!disable_gradient_descent) {
+                            // Yup, discontinuity
+                            // is_discontinuity[quadrant] = 1;
+
+                            // Solution par descente de gradient (ordonner a,b,c,d correctement selon delta_{x,y})
+                            float dx, dy;
+
+                            float* m = cam_codes[i][j];
+                            float* a = ref_codes[match_ay][match_ax];
+                            float* b = ref_codes[match_by][match_bx];
+                            float* c = ref_codes[match_cy][match_cx];
+                            float* d = ref_codes[match_dy][match_dx];
+
+                            gradient_descent_solution(m, a, b, c, d, &dx, &dy);
+
+                            nb_solutions++;
+
+                            best_subpix_x = current_match_x + dx * delta_x;
+                            best_subpix_y = current_match_y + dy * delta_y;
+                            is_best_discontinuity = 1;
+                            best_quadrant = quadrant;
+                            newcost = subpixel_cost(dx, dy, m, a, b, c, d);
+                        }
+
+                        continue;
+                    }
                 }
 
 
@@ -739,17 +765,17 @@ int main(int argc, char** argv) {
             free(solutions_x);
             free(solutions_y);
 
-            if(newcost <= 1) {
+            /* if(newcost <= 1) { */
                 /* printf("%f\n", newcost); */
                 // Écrit la valeur de la carte sous-pixel
                 subpix_matches[X][i][j] = best_subpix_x;
                 subpix_matches[Y][i][j] = best_subpix_y;
-                subpix_matches[DIST][i][j] = newcost;
+                subpix_matches[DIST][i][j] = 0; // newcost;
 
                 discontinuity_map[X][i][j] = is_best_discontinuity * 255;
-                discontinuity_map[Y][i][j] = is_best_discontinuity * (best_quadrant / 4.0 * 255);
-                discontinuity_map[DIST][i][j] = 0;
-            }
+                discontinuity_map[Y][i][j] = (!!(is_best_discontinuity * (best_quadrant & 2))) * 255;
+                discontinuity_map[DIST][i][j] = (!!(is_best_discontinuity * (best_quadrant & 1))) * 255;
+            /* } */
         }
     }
 
