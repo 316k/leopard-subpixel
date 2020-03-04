@@ -82,8 +82,8 @@ float subpixel_cost(float dx, float dy,
     norm_cam = sqrt(norm_cam);
     norm_ref = sqrt(norm_ref);
 
-    // return 1 - dot_product / (norm_ref * norm_cam);
-    return acosf(dot_product / (norm_ref * norm_cam));
+    return 1 - dot_product / (norm_ref * norm_cam);
+    // return acosf(dot_product / (norm_ref * norm_cam));
 }
 
 /* Start of a chunk of size (total_best_dimensions * 2) containing
@@ -130,8 +130,8 @@ int find_intersections(
 }
 
 // Gradient descent parameters
-float step_decrease_rate = 0.8;
-int max_iters = 100;
+float step_decrease_rate = 0.99;
+int max_iters = 300;
 
 // Gradient descent constants
 const float epsilon = 0.001;
@@ -149,15 +149,11 @@ int gradient_descent_solution(float* m, float* a, float* b, float* c, float* d,
     float previous_step_size = INFINITY;
 
     int iter = 0;
-    float step = 1;
+    float step = 0.1;
 
     float x = 0.5, y = 0.5;
 
     for(iter=0; previous_step_size > precision && iter < max_iters; iter++) {
-
-        // For the pixel to stay in the borders
-        x = fmax(fmin(x, 1), 0);
-        y = fmax(fmin(y, 1), 0);
 
         /* if(x < 0 || y < 0 || x > 1 || y > 1) { */
         /*     x = rand()/(float)RAND_MAX; */
@@ -175,8 +171,11 @@ int gradient_descent_solution(float* m, float* a, float* b, float* c, float* d,
         // too far away from starting point
         step *= step_decrease_rate;
 
-        x -= fmax(fmin(step * grad_x, 0.25), -0.25);
-        y -= fmax(fmin(step * grad_y, 0.25), -0.25);
+        x -= fmax(fmin(step * grad_x, 0.1), -0.1);
+        y -= fmax(fmin(step * grad_y, 0.1), -0.1);
+
+        x = fmax(fmin(x, 1), 0);
+        y = fmax(fmin(y, 1), 0);
 
         previous_step_size = fmax(fabs(prev_x - x), fabs(SQUARE(prev_y - y)));
     }
@@ -543,7 +542,7 @@ int main(int argc, char** argv) {
             float best_subpix_x = match_x;
             float best_subpix_y = match_y;
             int is_best_discontinuity = 0;
-            int best_quadrant = 0;
+            int best_quadrant = -1;
             float newcost = INFINITY;
 
             // Match complet (pixel et sous-pixel)
@@ -561,7 +560,7 @@ int main(int argc, char** argv) {
                 int current_match_x = match_x, current_match_y = match_y;
 
                 if(!force_billy_at_disc || force_gradient) {
-                    int delta_x = quadrant % 2 == 0 ? -1 : +1;
+                    int delta_x = (quadrant == 0 || quadrant == 2) ? -1 : +1;
                     int delta_y = quadrant < 2 ? -1 : +1;
 
                     int neighbour_unmatched =
@@ -607,11 +606,16 @@ int main(int argc, char** argv) {
 
                             nb_solutions++;
 
-                            best_subpix_x = current_match_x + dx * delta_x;
-                            best_subpix_y = current_match_y + dy * delta_y;
-                            is_best_discontinuity = 1;
-                            best_quadrant = quadrant;
-                            newcost = subpixel_cost(dx, dy, m, a, b, c, d);
+                            float cost = subpixel_cost(dx, dy, m, a, b, c, d);
+                            if(cost < newcost) {
+
+                                best_subpix_x = current_match_x + dx * delta_x;
+                                best_subpix_y = current_match_y + dy * delta_y;
+
+                                is_best_discontinuity = 1;
+                                best_quadrant = quadrant;
+                                newcost = cost;
+                            }
                         }
 
                         continue;
